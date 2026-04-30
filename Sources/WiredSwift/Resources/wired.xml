@@ -928,6 +928,12 @@
                 logged in.
             </p7:documentation>
         </p7:field>
+        <p7:field name="wired.account.user.list_offline_users" type="bool" id="8101" version="3.0">
+            <p7:documentation>
+                Indicates whether the account gives the privilege to receive the list of offline
+                registered users after login, enabling offline private messaging.
+            </p7:documentation>
+        </p7:field>
         <p7:field name="wired.account.chat.kick_users" type="bool" id="8024" version="2.0">
             <p7:documentation>
                 Indicates whether the account gives the privilege to kick other users.
@@ -1595,6 +1601,7 @@
             <p7:member field="wired.account.user.ban_users" />
             <p7:member field="wired.account.user.cannot_be_disconnected" />
             <p7:member field="wired.account.user.get_users" />
+            <p7:member field="wired.account.user.list_offline_users" />
             <p7:member field="wired.account.chat.kick_users" />
             <p7:member field="wired.account.chat.set_topic" />
             <p7:member field="wired.account.chat.create_chats" />
