@@ -451,6 +451,8 @@ struct NetworkTabView: View {
 
     private func color(for status: PortStatus) -> Color {
         switch status {
+        case .idle:
+            return .gray
         case .unknown:
             return .gray
         case .open:

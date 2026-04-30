@@ -47,6 +47,7 @@
 "network.check.consent.title" = "Externer Portcheck";
 "network.check.consent.message" = "Dies kontaktiert api.ipify.org und check-host.net, um zu prüfen, ob Ihr Server-Port aus dem Internet erreichbar ist.";
 "network.restart_required" = "Der Server muss nach einer Port-Änderung neu gestartet werden.";
+"network.port_status.idle" = "Nicht geprüft";
 "network.port_status.unknown" = "Externer Portcheck läuft…";
 "network.port_status.open" = "Von außen erreichbar";
 "network.port_status.closed" = "Von außen nicht erreichbar";

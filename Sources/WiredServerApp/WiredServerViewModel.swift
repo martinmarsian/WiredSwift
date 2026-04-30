@@ -28,7 +28,7 @@ final class WiredServerViewModel: ObservableObject {
     @Published var launchServerAtAppStart: Bool = false
 
     @Published var serverPort: Int = 4871
-    @Published var portStatus: PortStatus = .unknown
+    @Published var portStatus: PortStatus = .idle
 
     @Published var filesDirectory: String = ""
     @Published var filesReindexInterval: Int = 3600
@@ -2934,6 +2934,7 @@ enum DashboardHealthLevel {
 }
 
 enum PortStatus {
+    case idle
     case unknown
     case open
     case closed
@@ -2941,6 +2942,8 @@ enum PortStatus {
 
     var description: String {
         switch self {
+        case .idle:
+            return L("network.port_status.idle")
         case .unknown:
             return L("network.port_status.unknown")
         case .open:
