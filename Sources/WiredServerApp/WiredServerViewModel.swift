@@ -292,7 +292,6 @@ final class WiredServerViewModel: ObservableObject {
         refreshAdminStatus()
         refreshLogText()
         refreshDashboard(force: true)
-        checkPort()
 
         if binaryWasUpdated && isRunning {
             showRestartAfterUpdateAlert = true
