@@ -12,6 +12,7 @@
 "alert.initial_password.message" = "Der Server wurde mit einem zufälligen Admin-Passwort initialisiert. Notieren Sie es jetzt — es wird nicht erneut angezeigt.";
 "alert.initial_password.copy" = "In Zwischenablage kopieren";
 "common.ok" = "OK";
+"common.cancel" = "Abbrechen";
 "common.choose" = "Auswählen";
 "common.select" = "Auswählen";
 "common.save" = "Speichern";
