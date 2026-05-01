@@ -62,6 +62,7 @@
 "fda.external_volume" = "Dateiverzeichnis liegt auf einem externen Volume.";
 "fda.check.passed.detail" = "Der Daemon-Benutzer hat scheinbar Lesezugriff. Nach einem Binary-Update kann eine Neusignierung diesen Zugriff entziehen — prüfe das Server-Protokoll auf \"0 files, 0 dirs\".";
 "fda.check.failed.detail" = "Sicherstellen, dass das Dateiverzeichnis für den Daemon-Benutzer lesbar ist, dann auf \"Erneut prüfen\" klicken.";
+"fda.open_settings" = "Festplattenvollzugriff öffnen…";
 "fda.recheck" = "Erneut prüfen";
 "fda.restart_daemon" = "Daemon neu starten";
 

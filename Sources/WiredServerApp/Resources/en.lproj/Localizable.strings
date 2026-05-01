@@ -62,6 +62,7 @@
 "fda.external_volume" = "Files directory is on an external volume.";
 "fda.check.passed.detail" = "The daemon user appears to have read access. After a binary update, re-signing may revoke this — verify by checking the server log for \"0 files, 0 dirs\".";
 "fda.check.failed.detail" = "Ensure the files directory is readable by the daemon user, then click Re-check.";
+"fda.open_settings" = "Open Full Disk Access…";
 "fda.recheck" = "Re-check";
 "fda.restart_daemon" = "Restart Daemon";
 

@@ -62,6 +62,7 @@
 "fda.external_volume" = "Le répertoire de fichiers est sur un volume externe.";
 "fda.check.passed.detail" = "L'utilisateur daemon semble avoir accès en lecture. Après une mise à jour binaire, la re-signature peut révoquer cet accès — vérifiez le journal serveur pour \"0 files, 0 dirs\".";
 "fda.check.failed.detail" = "Assurez-vous que le répertoire de fichiers est lisible par l'utilisateur daemon, puis cliquez sur Revérifier.";
+"fda.open_settings" = "Ouvrir Accès disque complet…";
 "fda.recheck" = "Revérifier";
 "fda.restart_daemon" = "Redémarrer le daemon";
 
