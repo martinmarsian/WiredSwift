@@ -273,7 +273,7 @@ struct GeneralTabView: View {
 
                             Text(L("general.install_mode.group"))
                                 .bold()
-                                .frame(width: 44, alignment: .leading)
+                                .frame(width: 52, alignment: .leading)
                             TextField("daemon", text: $model.daemonGroupName)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 100)
