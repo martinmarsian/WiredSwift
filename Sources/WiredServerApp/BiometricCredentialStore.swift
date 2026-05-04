@@ -25,8 +25,10 @@ struct BiometricCredentialStore {
 
     /// Save password to keychain. No biometric ACL on the item — Touch ID is enforced at load time
     /// via LAContext.evaluatePolicy, which works reliably regardless of app signing.
-    static func save(password: String) {
-        guard let data = password.data(using: .utf8) else { return }
+    /// Returns true if the item was successfully written to the keychain.
+    @discardableResult
+    static func save(password: String) -> Bool {
+        guard let data = password.data(using: .utf8) else { return false }
 
         let deleteQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -42,7 +44,7 @@ struct BiometricCredentialStore {
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
-        SecItemAdd(attrs as CFDictionary, nil)
+        return SecItemAdd(attrs as CFDictionary, nil) == errSecSuccess
     }
 
     /// Retrieve the stored password. Shows the Touch ID / Apple Watch sheet first.
