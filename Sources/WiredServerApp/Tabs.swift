@@ -411,6 +411,7 @@ struct AdvancedTabView: View {
 struct NetworkTabView: View {
     @EnvironmentObject private var model: WiredServerViewModel
     @State private var portText: String = ""
+    @State private var showPortCheckConsent = false
 
     var body: some View {
         SettingsScrollPane {
@@ -446,7 +447,13 @@ struct NetworkTabView: View {
                         .frame(minWidth: 200, alignment: .leading)
                     Spacer()
                     Button(L("network.check")) {
-                        model.checkPort()
+                        showPortCheckConsent = true
+                    }
+                    .alert(L("network.check.consent.title"), isPresented: $showPortCheckConsent) {
+                        Button(L("network.check")) { model.checkPort() }
+                        Button(L("common.cancel"), role: .cancel) {}
+                    } message: {
+                        Text(L("network.check.consent.message"))
                     }
                 }
 
