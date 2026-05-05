@@ -42,7 +42,7 @@
 "general.execution.stopped_daemon" = "Arrêté (daemon)";
 "general.execution.start" = "Démarrer";
 "general.execution.stop" = "Arrêter";
-"general.execution.start_on_login" = "Démarrer automatiquement à la connexion macOS";
+"general.execution.start_on_login" = "Démarrer automatiquement à l'ouverture de session";
 "general.execution.start_at_boot" = "Démarrer au démarrage";
 
 "general.system_data_dir.section" = "Répertoire système des données";
