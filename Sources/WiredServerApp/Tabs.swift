@@ -449,18 +449,18 @@ struct NetworkTabView: View {
                     Button(L("network.check")) {
                         showPortCheckConsent = true
                     }
-                    .alert(L("network.check.consent.title"), isPresented: $showPortCheckConsent) {
-                        Button(L("network.check")) { model.checkPort() }
-                        Button(L("common.cancel"), role: .cancel) {}
-                    } message: {
-                        Text(L("network.check.consent.message"))
-                    }
                 }
 
                 Text(L("network.restart_required"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+        }
+        .alert(L("network.check.consent.title"), isPresented: $showPortCheckConsent) {
+            Button(L("network.check")) { model.checkPort() }
+            Button(L("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(L("network.check.consent.message"))
         }
         .onAppear { portText = String(model.serverPort) }
         .onChange(of: model.serverPort) { portText = String($0) }
@@ -475,7 +475,7 @@ struct NetworkTabView: View {
 
     private func color(for status: PortStatus) -> Color {
         switch status {
-        case .unknown:
+        case .idle, .unknown:
             return .gray
         case .open:
             return .green

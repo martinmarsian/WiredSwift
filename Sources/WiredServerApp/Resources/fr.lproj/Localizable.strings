@@ -14,6 +14,7 @@
 "common.ok" = "OK";
 "common.choose" = "Choisir";
 "common.select" = "Sélectionner";
+"common.cancel" = "Annuler";
 "common.save" = "Enregistrer";
 
 "pane.general" = "Général";
