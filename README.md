@@ -66,6 +66,7 @@ Compared to classic Wired 2.0 deployments and clients, Wired 3.0 adds a broader 
 - **Multiple public chats** instead of a single default public room, with protocol support for listing, creating, and deleting public chats
 - **Live typing indicator** in chat conversations, including protocol-level typing state broadcasts
 - **Board reactions** on posts, with dedicated account privilege support for adding reactions
+- **Chat reactions** on public-chat messages (Wired 3.2), with server-assigned message identifiers and a `wired.account.chat.add_reactions` privilege
 - **Continuous folder sync** with a dedicated sync daemon (`wiredsyncd` on macOS) for keeping local folders and remote Wired shares aligned
 - **Remote board search** so clients can query discussions server-side and jump directly to matching threads or snippets
 - **FTS5-backed file search** on supported SQLite builds, with automatic fallback to `LIKE` queries when FTS5 is unavailable
