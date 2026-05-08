@@ -1,7 +1,8 @@
 "window.title" = "Wired Server";
 "alert.error.title" = "Erreur";
 "alert.helper_setup.title" = "Configuration unique requise";
-"alert.helper_setup.message" = "Wired Server a besoin d'une approbation unique. Veuillez cliquer sur «Autoriser» dans la notification système qui vient d'apparaître, puis appuyer sur «Réessayer».";
+"alert.helper_setup.message" = "Wired Server a besoin d'une approbation unique. Cliquez sur «Autoriser» dans la notification système, puis appuyez sur «Réessayer». Si la notification a disparu, utilisez «Éléments de connexion» pour l'activer manuellement.";
+"alert.helper_setup.open" = "Éléments de connexion…";
 "alert.helper_setup.retry" = "Réessayer";
 "alert.binary_updated.title" = "Serveur mis à jour";
 "alert.privileged_update.title" = "Mise à jour disponible";

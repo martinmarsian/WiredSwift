@@ -1,7 +1,8 @@
 "window.title" = "Wired Server";
 "alert.error.title" = "Error";
 "alert.helper_setup.title" = "One-Time Setup Required";
-"alert.helper_setup.message" = "Wired Server needs a one-time approval. Please click Allow in the system notification that just appeared, then tap Retry.";
+"alert.helper_setup.message" = "Wired Server needs a one-time approval. Click Allow in the system notification, then tap Retry. If the notification is gone, use \"Login Items\" to enable it manually.";
+"alert.helper_setup.open" = "Login Items…";
 "alert.helper_setup.retry" = "Retry";
 "alert.binary_updated.title" = "Server Updated";
 "alert.privileged_update.title" = "Server Update Available";

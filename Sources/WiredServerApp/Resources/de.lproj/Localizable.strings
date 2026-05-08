@@ -1,7 +1,8 @@
 "window.title" = "Wired Server";
 "alert.error.title" = "Fehler";
 "alert.helper_setup.title" = "Einmalige Einrichtung erforderlich";
-"alert.helper_setup.message" = "Wired Server benötigt eine einmalige Genehmigung. Bitte klicke in der Systemnotification auf \"Erlauben\" und dann auf \"Erneut versuchen\".";
+"alert.helper_setup.message" = "Wired Server benötigt eine einmalige Genehmigung. Klicke in der Systemnotification auf \"Erlauben\" und dann auf \"Erneut versuchen\". Falls die Notification verschwunden ist, über \"Anmeldeelemente\" manuell aktivieren.";
+"alert.helper_setup.open" = "Anmeldeelemente…";
 "alert.helper_setup.retry" = "Erneut versuchen";
 "alert.binary_updated.title" = "Server aktualisiert";
 "alert.binary_updated.message" = "Eine neue Version der Server-Binary wurde installiert. Der laufende Server verwendet noch die alte Version. Möchten Sie ihn jetzt neu starten?";

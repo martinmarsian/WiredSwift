@@ -50,6 +50,9 @@ struct ContentView: View {
                     action?()
                 }
             }
+            Button(L("alert.helper_setup.open")) {
+                model.openLoginItemsSettings()
+            }
             Button(L("common.cancel"), role: .cancel) {
                 model.pendingHelperRetryAction = nil
             }
