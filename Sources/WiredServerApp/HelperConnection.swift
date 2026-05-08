@@ -52,7 +52,14 @@ final class HelperConnection {
     /// bundled in Contents/Library/LaunchDaemons/ is registered with the system. On first
     /// registration a notification prompts the user to approve in System Settings → General →
     /// Login Items. After approval launchd demand-starts the helper on first XPC connection.
-    func installIfNeeded() throws {
+    /// Also checks the running helper's version and restarts it if the binary was updated.
+    func installIfNeeded() async throws {
+        try registerIfNeeded()
+        await restartIfOutdated()
+    }
+
+    /// Pure SMAppService registration — synchronous, no XPC calls.
+    private func registerIfNeeded() throws {
         let service = SMAppService.daemon(plistName: "\(kHelperMachServiceName).plist")
         switch service.status {
         case .enabled:
@@ -90,6 +97,25 @@ final class HelperConnection {
         }
     }
 
+    /// If the running helper has an outdated protocol version, bootout and re-register so
+    /// launchd starts the new binary on the next XPC connection.
+    private func restartIfOutdated() async {
+        let version = (try? await getVersion()) ?? ""
+        guard version != kHelperVersion else { return }
+        NSLog("[HelperConnection] Helper version '%@' ≠ expected '%@', restarting…", version, kHelperVersion)
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        p.arguments = ["bootout", "system/\(kHelperMachServiceName)"]
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        try? p.run()
+        p.waitUntilExit()
+        _connection?.invalidate()
+        _connection = nil
+        // Re-register so launchd will start the new binary on the next connection attempt.
+        try? registerIfNeeded()
+    }
+
 
     /// Returns true if the helper mach service is registered in launchd's system domain.
     /// Uses `launchctl print system/<label>` which works without root and correctly
@@ -122,10 +148,10 @@ final class HelperConnection {
         }
     }
 
-    func runFDACheck(scriptPath: String, outputPath: String) async throws -> Bool {
+    func runFDACheck(filesPath: String) async throws -> Bool {
         try await withCheckedThrowingContinuation { cont in
             guard let p = xpcProxy(onError: { cont.resume(throwing: $0) }) else { return }
-            p.runFDACheck(scriptPath: scriptPath, outputPath: outputPath) { granted, message in
+            p.runFDACheck(filesPath: filesPath) { granted, message in
                 if message.isEmpty {
                     cont.resume(returning: granted)
                 } else {
@@ -136,12 +162,10 @@ final class HelperConnection {
     }
 
     /// Returns fdaGranted flag.
-    func startDaemon(plistPath: String, label: String,
-                     fdaScriptPath: String, fdaOutputPath: String) async throws -> Bool {
+    func startDaemon(plistPath: String, label: String, filesPath: String) async throws -> Bool {
         try await withCheckedThrowingContinuation { cont in
             guard let p = xpcProxy(onError: { cont.resume(throwing: $0) }) else { return }
-            p.startDaemon(plistPath: plistPath, label: label,
-                          fdaScriptPath: fdaScriptPath, fdaOutputPath: fdaOutputPath) { success, fdaGranted, message in
+            p.startDaemon(plistPath: plistPath, label: label, filesPath: filesPath) { success, fdaGranted, message in
                 if success {
                     cont.resume(returning: fdaGranted)
                 } else {
@@ -157,9 +181,9 @@ final class HelperConnection {
         }
     }
 
-    func activateDaemon(config: NSDictionary, plistData: Data) async throws {
+    func activateDaemon(config: NSDictionary, filesPath: String, runAtLoad: Bool) async throws {
         try await boolReply { p, cont in
-            p.activateDaemon(config: config, plistData: plistData, withReply: cont)
+            p.activateDaemon(config: config, filesPath: filesPath, runAtLoad: runAtLoad, withReply: cont)
         }
     }
 
@@ -169,15 +193,17 @@ final class HelperConnection {
         }
     }
 
-    func installPlist(data: Data, destinationPath: String) async throws {
+    func installDaemonPlist(daemonUser: String, dataPath: String, filesPath: String,
+                            runAtLoad: Bool, plistPath: String) async throws {
         try await boolReply { p, cont in
-            p.installPlist(data: data, destinationPath: destinationPath, withReply: cont)
+            p.installDaemonPlist(daemonUser: daemonUser, dataPath: dataPath, filesPath: filesPath,
+                                  runAtLoad: runAtLoad, plistPath: plistPath, withReply: cont)
         }
     }
 
-    func copyBinary(sourcePath: String, destinationPath: String) async throws {
+    func copyBinary(sourcePath: String) async throws {
         try await boolReply { p, cont in
-            p.copyBinary(sourcePath: sourcePath, destinationPath: destinationPath, withReply: cont)
+            p.copyBinary(sourcePath: sourcePath, withReply: cont)
         }
     }
 

@@ -1,10 +1,10 @@
 import Foundation
 
 let kHelperMachServiceName = "fr.read-write.WiredServer3.Helper"
-let kHelperVersion = "1"
+let kHelperVersion = "2"
 
 /// XPC protocol between WiredServerApp and WiredServerHelper.
-/// All operations are specific and validated — the helper never executes arbitrary shell commands.
+/// All parameters are typed and validated; the helper never executes arbitrary code.
 @objc protocol WiredHelperProtocol: NSObjectProtocol {
 
     /// Create /Library/Wired3 (or similar system path) owned by the given user.
@@ -14,21 +14,18 @@ let kHelperVersion = "1"
         withReply reply: @escaping (Bool, String) -> Void
     )
 
-    /// Run a pre-written FDA check shell script and return whether access was granted.
+    /// Check whether filesPath is accessible to the wired3 binary using its TCC grant.
     func runFDACheck(
-        scriptPath: String,
-        outputPath: String,
+        filesPath: String,
         withReply reply: @escaping (Bool, String) -> Void
     )
 
-    /// Bootstrap and kickstart the LaunchDaemon. Optionally runs an FDA check script
-    /// in the same root context to avoid a second auth prompt.
-    /// Reply: (success, fdaGranted, errorMessage)
+    /// Bootstrap and kickstart the LaunchDaemon. If filesPath is non-empty, also runs a typed
+    /// FDA check via the wired3 binary. Reply: (success, fdaGranted, errorMessage)
     func startDaemon(
         plistPath: String,
         label: String,
-        fdaScriptPath: String,
-        fdaOutputPath: String,
+        filesPath: String,
         withReply reply: @escaping (Bool, Bool, String) -> Void
     )
 
@@ -38,11 +35,12 @@ let kHelperVersion = "1"
         withReply reply: @escaping (Bool, String) -> Void
     )
 
-    /// Create daemon user/group, set ownership, install LaunchDaemon plist.
+    /// Create daemon user/group, set ownership, build and install LaunchDaemon plist.
     /// config keys: user, group, uid, gid, createUser, createGroup, dataPath, plistPath
     func activateDaemon(
         config: NSDictionary,
-        plistData: Data,
+        filesPath: String,
+        runAtLoad: Bool,
         withReply reply: @escaping (Bool, String) -> Void
     )
 
@@ -53,17 +51,19 @@ let kHelperVersion = "1"
         withReply reply: @escaping (Bool, String) -> Void
     )
 
-    /// Copy plist data to a LaunchDaemons path with correct ownership.
-    func installPlist(
-        data: Data,
-        destinationPath: String,
+    /// Build and install the LaunchDaemon plist from typed parameters.
+    func installDaemonPlist(
+        daemonUser: String,
+        dataPath: String,
+        filesPath: String,
+        runAtLoad: Bool,
+        plistPath: String,
         withReply reply: @escaping (Bool, String) -> Void
     )
 
-    /// Copy a binary to a destination and set it executable.
+    /// Copy a binary from sourcePath to /Library/Wired3/bin/wired3 and set it executable.
     func copyBinary(
         sourcePath: String,
-        destinationPath: String,
         withReply reply: @escaping (Bool, String) -> Void
     )
 

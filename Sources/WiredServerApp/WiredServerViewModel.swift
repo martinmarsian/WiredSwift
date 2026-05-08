@@ -401,7 +401,7 @@ final class WiredServerViewModel: ObservableObject {
     private func createSystemDataDirectory() async throws {
         let username = NSUserName()
         try validateSystemUsername(username)
-        try HelperConnection.shared.installIfNeeded()
+        try await HelperConnection.shared.installIfNeeded()
         try await HelperConnection.shared.createSystemDirectory(
             path: Self.systemDataDirectory,
             owner: username
@@ -477,47 +477,6 @@ final class WiredServerViewModel: ObservableObject {
         return path.hasPrefix("/Volumes/")
     }
 
-    // Creates a private 0700 temporary directory via mkdtemp so that neither the output file
-    // nor the script file can be symlink-raced by an unprivileged local user before root runs them.
-    private func makePrivateTempDir() throws -> URL {
-        // mkdtemp(3) requires a mutable C-string buffer ending in "XXXXXX".
-        var template = Array((NSTemporaryDirectory() + "wired3fda.XXXXXX").utf8CString)
-        guard mkdtemp(&template) != nil else {
-            throw NSError(domain: POSIXError.errorDomain, code: Int(errno),
-                          userInfo: [NSLocalizedDescriptionKey: "mkdtemp failed: \(errno)"])
-        }
-        return URL(fileURLWithPath: String(cString: template), isDirectory: true)
-    }
-
-    // Writes a shell script that tests whether the daemon user can list the files directory.
-    // Uses `su -m` rather than `sudo -u` so the subprocess runs with the daemon user's process
-    // identity — `sudo -u` launched from root inherits root's TCC context and can bypass macOS
-    // Removable Volumes / Full Disk Access checks that the actual daemon binary would hit.
-    // NOTE: This check is still approximate. If the server log shows "0 files, 0 dirs" after
-    // a binary update, re-grant FDA to /Library/Wired3/bin/wired3 in
-    // System Settings → Privacy & Security → Full Disk Access.
-    private func writeFDACheckScript(filesDir: String, daemonUser: String, outputFile: String, to scriptPath: String) {
-        let wired3Binary = installedBinaryPath
-        let sh = """
-        #!/bin/sh
-        OUT='\(outputFile)'
-        FILES='\(filesDir)'
-        WIRED3='\(wired3Binary)'
-
-        # Run the wired3 binary directly as root (the helper already runs as root).
-        # TCC grants (Removable Volumes / Full Disk Access) are bound to the binary's
-        # code signature, not the UID — so root and _wired see the same TCC result.
-        # The previous su -m approach caused false negatives because su exits non-zero
-        # in non-TTY daemon contexts even when running as root.
-        if "$WIRED3" --check-access "$FILES" >/dev/null 2>&1; then
-            echo 1 > "$OUT"
-        else
-            echo 0 > "$OUT"
-        fi
-        """
-        try? sh.write(toFile: scriptPath, atomically: true, encoding: .utf8)
-    }
-
     // FDA status inference: if the daemon is running, TCC is clearly OK — the process
     // is already accessing the volume. A direct XPC check is unreliable because the helper
     // runs as root and TCC grants are stored per-user; root has a separate TCC database
@@ -532,27 +491,15 @@ final class WiredServerViewModel: ObservableObject {
             wired3HasFullDiskAccess = true
             return
         }
-        // Daemon not running: best-effort POSIX check via the helper.
-        // This catches permission issues but cannot verify TCC grants.
+        // Daemon not running: best-effort check via the helper.
+        // The helper runs wired3 --check-access directly; TCC grants are per-binary.
         let filesDir = currentServerRootPath()
-        guard let tmpDir = try? makePrivateTempDir() else {
-            wired3HasFullDiskAccess = false
-            return
-        }
-        let fdaTmpFile = tmpDir.appendingPathComponent("result").path
-        let fdaShFile  = tmpDir.appendingPathComponent("check.sh").path
-        writeFDACheckScript(filesDir: filesDir, daemonUser: daemonUserName, outputFile: fdaTmpFile, to: fdaShFile)
         isCheckingFDA = true
         Task { @MainActor in
-            defer {
-                try? FileManager.default.removeItem(at: tmpDir)
-                isCheckingFDA = false
-            }
+            defer { isCheckingFDA = false }
             do {
-                try HelperConnection.shared.installIfNeeded()
-                wired3HasFullDiskAccess = try await HelperConnection.shared.runFDACheck(
-                    scriptPath: fdaShFile, outputPath: fdaTmpFile
-                )
+                try await HelperConnection.shared.installIfNeeded()
+                wired3HasFullDiskAccess = try await HelperConnection.shared.runFDACheck(filesPath: filesDir)
             } catch {
                 wired3HasFullDiskAccess = false
                 publishHelperError(L("fda.recheck"), error)
@@ -681,41 +628,25 @@ final class WiredServerViewModel: ObservableObject {
 
         // bootstrap registers the service (no-op if already registered).
         // kickstart starts it regardless of RunAtLoad value.
-        // If files dir is on an external volume, embed a TCC/FDA check in the SAME privileged
-        // script so only ONE admin auth dialog is shown.
+        // If files dir is on an external volume, also run a typed FDA check in the same
+        // privileged call so only ONE admin auth dialog is shown.
         let onExternal = filesDirectoryIsOnExternalVolume
-        // Use a private 0700 temp directory (mkdtemp) so neither the script nor the output
-        // file can be symlink-raced by an unprivileged user before root executes them.
-        var fdaTmpFile = ""
-        var fdaShFile  = ""
-        var tmpDir: URL?
-        if onExternal, let dir = try? makePrivateTempDir() {
-            tmpDir = dir
-            fdaTmpFile = dir.appendingPathComponent("result").path
-            fdaShFile  = dir.appendingPathComponent("check.sh").path
-            writeFDACheckScript(filesDir: currentServerRootPath(), daemonUser: daemonUserName, outputFile: fdaTmpFile, to: fdaShFile)
-        }
+        let filesPath = onExternal ? currentServerRootPath() : ""
 
         let plistPath = launchDaemonPlistPath
         let label = launchAgentLabel
-        let fdaScript = fdaShFile
-        let fdaOutput = fdaTmpFile
-        let onExt = onExternal
         Task { @MainActor in
             do {
-                try HelperConnection.shared.installIfNeeded()
+                try await HelperConnection.shared.installIfNeeded()
                 let fdaGranted = try await HelperConnection.shared.startDaemon(
                     plistPath: plistPath,
                     label: label,
-                    fdaScriptPath: fdaScript,
-                    fdaOutputPath: fdaOutput
+                    filesPath: filesPath
                 )
-                if onExt {
-                    if let dir = tmpDir { try? FileManager.default.removeItem(at: dir) }
+                if onExternal {
                     wired3HasFullDiskAccess = fdaGranted
                 }
             } catch {
-                if let dir = tmpDir { try? FileManager.default.removeItem(at: dir) }
                 publishHelperError(L("error.start_daemon_failed"), error)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
@@ -728,7 +659,7 @@ final class WiredServerViewModel: ObservableObject {
         let label = launchAgentLabel
         Task { @MainActor in
             do {
-                try HelperConnection.shared.installIfNeeded()
+                try await HelperConnection.shared.installIfNeeded()
                 try await HelperConnection.shared.stopDaemon(label: label)
             } catch {
                 publishHelperError(L("error.stop_daemon_failed"), error)
@@ -775,7 +706,6 @@ final class WiredServerViewModel: ObservableObject {
         let gid = createGroup ? try findFreeSystemGID() : groupGID(for: group)
         if createUser { uid = try findFreeSystemUID() }
 
-        let plistData = try makeDaemonPlistData()
         let config: NSDictionary = [
             "user": name, "group": group,
             "uid": uid, "gid": gid,
@@ -784,8 +714,12 @@ final class WiredServerViewModel: ObservableObject {
             "plistPath": launchDaemonPlistPath
         ]
 
-        try HelperConnection.shared.installIfNeeded()
-        try await HelperConnection.shared.activateDaemon(config: config, plistData: plistData)
+        try await HelperConnection.shared.installIfNeeded()
+        try await HelperConnection.shared.activateDaemon(
+            config: config,
+            filesPath: currentServerRootPath(),
+            runAtLoad: daemonStartAtBoot
+        )
         userDefaults.set(createUser, forKey: daemonUserCreatedKey)
         userDefaults.set(createGroup, forKey: daemonGroupCreatedKey)
         daemonAccountsVerified = false
@@ -802,7 +736,7 @@ final class WiredServerViewModel: ObservableObject {
             "deleteUser": userDefaults.bool(forKey: daemonUserCreatedKey),
             "deleteGroup": userDefaults.bool(forKey: daemonGroupCreatedKey)
         ]
-        try HelperConnection.shared.installIfNeeded()
+        try await HelperConnection.shared.installIfNeeded()
         try await HelperConnection.shared.deactivateDaemon(config: config)
         userDefaults.removeObject(forKey: daemonUserCreatedKey)
         userDefaults.removeObject(forKey: daemonGroupCreatedKey)
@@ -810,33 +744,14 @@ final class WiredServerViewModel: ObservableObject {
     }
 
     private func reinstallDaemonPlist() async throws {
-        let data = try makeDaemonPlistData()
-        try HelperConnection.shared.installIfNeeded()
-        try await HelperConnection.shared.installPlist(data: data, destinationPath: launchDaemonPlistPath)
-    }
-
-    private func makeDaemonPlistData() throws -> Data {
-        let plist: [String: Any] = [
-            "Label": launchAgentLabel,
-            "ProgramArguments": [
-                installedBinaryPath,
-                "--working-directory", workingDirectory,
-                "--db", databasePath,
-                "--config", configPath,
-                "--root", currentServerRootPath()
-            ],
-            "UserName": daemonUserName,
-            "WorkingDirectory": workingDirectory,
-            "RunAtLoad": daemonStartAtBoot,
-            "KeepAlive": false,
-            "StandardOutPath": logPath,
-            "StandardErrorPath": logPath
-        ]
-        do {
-            return try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
-        } catch {
-            throw WiredServerError.launchDaemonWriteFailed
-        }
+        try await HelperConnection.shared.installIfNeeded()
+        try await HelperConnection.shared.installDaemonPlist(
+            daemonUser: daemonUserName,
+            dataPath: workingDirectory,
+            filesPath: currentServerRootPath(),
+            runAtLoad: daemonStartAtBoot,
+            plistPath: launchDaemonPlistPath
+        )
     }
 
 
@@ -1826,11 +1741,10 @@ final class WiredServerViewModel: ObservableObject {
     /// Only safe to call when the daemon is confirmed stopped.
     func applyPrivilegedUpdate() {
         guard let src = bundledServerBinaryPath() else { return }
-        let dst = installedBinaryPath
         Task { @MainActor in
             do {
-                try HelperConnection.shared.installIfNeeded()
-                try await HelperConnection.shared.copyBinary(sourcePath: src, destinationPath: dst)
+                try await HelperConnection.shared.installIfNeeded()
+                try await HelperConnection.shared.copyBinary(sourcePath: src)
                 appendRuntimeLog("binary-update: privileged update applied")
                 showPrivilegedUpdateAlert = false
                 refreshInstallStatus()

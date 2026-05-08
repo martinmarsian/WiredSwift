@@ -4,7 +4,7 @@ func diagLog(_ msg: String) {
     let ts = ISO8601DateFormatter().string(from: Date())
     let line = "[\(ts)] \(msg)\n"
     guard let data = line.data(using: .utf8) else { return }
-    let url = URL(fileURLWithPath: "/tmp/wiredhelper.log")
+    let url = URL(fileURLWithPath: "/var/log/wiredhelper.log")
     if let fh = try? FileHandle(forWritingTo: url) {
         fh.seekToEndOfFile()
         fh.write(data)

@@ -19,6 +19,13 @@ final class HelperTool: NSObject, NSXPCListenerDelegate {
     }
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
+        let requirement = "anchor apple generic and identifier \"fr.read-write.WiredServer3\" and certificate leaf[subject.OU] = \"VGB467J8DZ\""
+        do {
+            try connection.setCodeSigningRequirement(requirement)
+        } catch {
+            diagLog("setCodeSigningRequirement failed: \(error)")
+            return false
+        }
         connection.exportedInterface = NSXPCInterface(with: WiredHelperProtocol.self)
         connection.exportedObject = HelperDelegate()
         connection.resume()

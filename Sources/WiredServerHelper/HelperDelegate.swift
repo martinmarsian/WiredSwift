@@ -27,33 +27,38 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
 
     // MARK: - FDA check
 
-    func runFDACheck(scriptPath: String, outputPath: String,
+    func runFDACheck(filesPath: String,
                      withReply reply: @escaping (Bool, String) -> Void) {
-        guard isAbsolutePath(scriptPath), isAbsolutePath(outputPath) else {
+        guard isAbsolutePath(filesPath) else {
             return reply(false, "Invalid path")
         }
-        run("/bin/sh", [scriptPath])
-        let raw = (try? String(contentsOfFile: outputPath, encoding: .utf8)) ?? "0"
-        reply(raw.trimmingCharacters(in: .whitespacesAndNewlines) == "1", "")
+        let wired3 = "/Library/Wired3/bin/wired3"
+        guard FileManager.default.isExecutableFile(atPath: wired3) else {
+            return reply(false, "wired3 binary not found at \(wired3)")
+        }
+        let status = run(wired3, ["--check-access", filesPath])
+        reply(status == 0, "")
     }
 
     // MARK: - Daemon lifecycle
 
-    func startDaemon(plistPath: String, label: String,
-                     fdaScriptPath: String, fdaOutputPath: String,
+    func startDaemon(plistPath: String, label: String, filesPath: String,
                      withReply reply: @escaping (Bool, Bool, String) -> Void) {
         guard plistPath.hasPrefix("/Library/LaunchDaemons/"), isValidLabel(label) else {
             return reply(false, false, "Invalid parameters")
         }
-        // bootstrap is a no-op if already registered; kickstart forces immediate start
         run("/bin/launchctl", ["bootstrap", "system", plistPath])
         let kickStatus = run("/bin/launchctl", ["kickstart", "system/\(label)"])
 
         var fdaGranted = false
-        if !fdaScriptPath.isEmpty {
-            run("/bin/sh", [fdaScriptPath])
-            let raw = (try? String(contentsOfFile: fdaOutputPath, encoding: .utf8)) ?? "0"
-            fdaGranted = raw.trimmingCharacters(in: .whitespacesAndNewlines) == "1"
+        if !filesPath.isEmpty {
+            guard isAbsolutePath(filesPath) else {
+                return reply(false, false, "Invalid filesPath")
+            }
+            let wired3 = "/Library/Wired3/bin/wired3"
+            if FileManager.default.isExecutableFile(atPath: wired3) {
+                fdaGranted = run(wired3, ["--check-access", filesPath]) == 0
+            }
         }
 
         if kickStatus == 0 {
@@ -76,7 +81,7 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
 
     // MARK: - Daemon activation / deactivation
 
-    func activateDaemon(config: NSDictionary, plistData: Data,
+    func activateDaemon(config: NSDictionary, filesPath: String, runAtLoad: Bool,
                         withReply reply: @escaping (Bool, String) -> Void) {
         guard
             let user      = config["user"]        as? String, isValidAccount(user),
@@ -85,8 +90,9 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
             let gid       = config["gid"]         as? Int,
             let createUser  = config["createUser"]  as? Bool,
             let createGroup = config["createGroup"] as? Bool,
-            let dataPath  = config["dataPath"]    as? String, dataPath.hasPrefix("/Library/"),
-            let plistPath = config["plistPath"]   as? String, plistPath.hasPrefix("/Library/LaunchDaemons/")
+            let dataPath  = config["dataPath"]    as? String, dataPath.hasPrefix("/Library/"), !dataPath.contains(".."),
+            let plistPath = config["plistPath"]   as? String, plistPath.hasPrefix("/Library/LaunchDaemons/"),
+            isAbsolutePath(filesPath) || filesPath.isEmpty
         else { return reply(false, "Invalid configuration") }
 
         if createGroup {
@@ -115,14 +121,16 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
         run("/usr/sbin/chown", ["\(user):staff", "\(dataPath)/bin"])
         run("/bin/chmod", ["775", "\(dataPath)/bin"])
         run("/bin/rm", ["-rf", "\(dataPath)/bin/.updates"])
-        run("/bin/chmod", ["755", "\(dataPath)/bin/wired3"])   // ignore failure (file may not exist)
+        run("/bin/chmod", ["755", "\(dataPath)/bin/wired3"])
         run("/usr/sbin/chown", ["\(user):staff", "\(dataPath)/etc"])
         run("/bin/chmod", ["775", "\(dataPath)/etc"])
         run("/usr/sbin/chown", ["\(user):staff", "\(dataPath)/etc/config.ini"])
         run("/bin/chmod", ["664", "\(dataPath)/etc/config.ini"])
 
-        // Install plist
-        guard writePlist(plistData, to: plistPath) else {
+        // Build and install plist
+        guard let plistData = buildDaemonPlistData(daemonUser: user, dataPath: dataPath,
+                                                    filesPath: filesPath, runAtLoad: runAtLoad),
+              writePlist(plistData, to: plistPath) else {
             return reply(false, "Failed to install LaunchDaemon plist")
         }
 
@@ -164,22 +172,28 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
 
     // MARK: - Plist / binary install
 
-    func installPlist(data: Data, destinationPath: String,
-                      withReply reply: @escaping (Bool, String) -> Void) {
-        guard destinationPath.hasPrefix("/Library/LaunchDaemons/") else {
-            return reply(false, "Invalid destination path")
+    func installDaemonPlist(daemonUser: String, dataPath: String, filesPath: String,
+                            runAtLoad: Bool, plistPath: String,
+                            withReply reply: @escaping (Bool, String) -> Void) {
+        guard isValidAccount(daemonUser),
+              dataPath.hasPrefix("/Library/"), !dataPath.contains(".."),
+              isAbsolutePath(filesPath) || filesPath.isEmpty,
+              plistPath.hasPrefix("/Library/LaunchDaemons/") else {
+            return reply(false, "Invalid parameters")
         }
-        guard writePlist(data, to: destinationPath) else {
-            return reply(false, "Failed to install plist")
+        guard let data = buildDaemonPlistData(daemonUser: daemonUser, dataPath: dataPath,
+                                               filesPath: filesPath, runAtLoad: runAtLoad),
+              writePlist(data, to: plistPath) else {
+            return reply(false, "Failed to build or install plist")
         }
         reply(true, "")
     }
 
-    func copyBinary(sourcePath: String, destinationPath: String,
+    func copyBinary(sourcePath: String,
                     withReply reply: @escaping (Bool, String) -> Void) {
-        guard isAbsolutePath(sourcePath), isAbsolutePath(destinationPath),
-              !sourcePath.contains(".."), !destinationPath.contains("..") else {
-            return reply(false, "Invalid path")
+        let destinationPath = "/Library/Wired3/bin/wired3"
+        guard isAbsolutePath(sourcePath), !sourcePath.contains("..") else {
+            return reply(false, "Invalid source path")
         }
         do {
             if FileManager.default.fileExists(atPath: destinationPath) {
@@ -201,10 +215,37 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
         p.executableURL = URL(fileURLWithPath: path)
         p.arguments = args
         p.standardOutput = FileHandle.nullDevice
-        p.standardError  = FileHandle.nullDevice
+        let errPipe = Pipe()
+        p.standardError = errPipe
         try? p.run()
         p.waitUntilExit()
+        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+        if let msg = String(data: errData, encoding: .utf8),
+           !msg.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            diagLog("\(URL(fileURLWithPath: path).lastPathComponent) stderr: \(msg.trimmingCharacters(in: .whitespacesAndNewlines))")
+        }
         return p.terminationStatus
+    }
+
+    private func buildDaemonPlistData(daemonUser: String, dataPath: String,
+                                       filesPath: String, runAtLoad: Bool) -> Data? {
+        let binary = (dataPath as NSString).appendingPathComponent("bin/wired3")
+        let db     = (dataPath as NSString).appendingPathComponent("wired3.db")
+        let config = (dataPath as NSString).appendingPathComponent("etc/config.ini")
+        let log    = (dataPath as NSString).appendingPathComponent("wired.log")
+        let root   = filesPath.isEmpty ? (dataPath as NSString).appendingPathComponent("files") : filesPath
+        let plist: [String: Any] = [
+            "Label": "fr.read-write.wired3.server",
+            "ProgramArguments": [binary, "--working-directory", dataPath,
+                                  "--db", db, "--config", config, "--root", root],
+            "UserName": daemonUser,
+            "WorkingDirectory": dataPath,
+            "RunAtLoad": runAtLoad,
+            "KeepAlive": false,
+            "StandardOutPath": log,
+            "StandardErrorPath": log
+        ]
+        return try? PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
     }
 
     private func writePlist(_ data: Data, to path: String) -> Bool {
