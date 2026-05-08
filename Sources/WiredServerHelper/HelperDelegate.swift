@@ -27,22 +27,24 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
 
     // MARK: - FDA check
 
-    func runFDACheck(filesPath: String,
+    func runFDACheck(filesPath: String, daemonUser: String,
                      withReply reply: @escaping (Bool, String) -> Void) {
-        guard isAbsolutePath(filesPath) else {
-            return reply(false, "Invalid path")
+        guard isAbsolutePath(filesPath), isValidAccount(daemonUser) else {
+            return reply(false, "Invalid parameters")
         }
         let wired3 = "/Library/Wired3/bin/wired3"
         guard FileManager.default.isExecutableFile(atPath: wired3) else {
             return reply(false, "wired3 binary not found at \(wired3)")
         }
-        let status = run(wired3, ["--check-access", filesPath])
+        // Run wired3 as the daemon user so TCC evaluates the grant for wired3's
+        // code signature under the daemon identity — not as root which bypasses TCC.
+        let status = run("/usr/bin/sudo", ["-n", "-u", daemonUser, wired3, "--check-access", filesPath])
         reply(status == 0, "")
     }
 
     // MARK: - Daemon lifecycle
 
-    func startDaemon(plistPath: String, label: String, filesPath: String,
+    func startDaemon(plistPath: String, label: String, filesPath: String, daemonUser: String,
                      withReply reply: @escaping (Bool, Bool, String) -> Void) {
         guard plistPath.hasPrefix("/Library/LaunchDaemons/"), isValidLabel(label) else {
             return reply(false, false, "Invalid parameters")
@@ -52,12 +54,12 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
 
         var fdaGranted = false
         if !filesPath.isEmpty {
-            guard isAbsolutePath(filesPath) else {
-                return reply(false, false, "Invalid filesPath")
+            guard isAbsolutePath(filesPath), isValidAccount(daemonUser) else {
+                return reply(false, false, "Invalid filesPath or daemonUser")
             }
             let wired3 = "/Library/Wired3/bin/wired3"
             if FileManager.default.isExecutableFile(atPath: wired3) {
-                fdaGranted = run(wired3, ["--check-access", filesPath]) == 0
+                fdaGranted = run("/usr/bin/sudo", ["-n", "-u", daemonUser, wired3, "--check-access", filesPath]) == 0
             }
         }
 

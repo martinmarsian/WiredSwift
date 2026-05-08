@@ -43,10 +43,16 @@ struct ContentView: View {
             Text(model.lastErrorMessage)
         }
         .alert(L("alert.helper_setup.title"), isPresented: $model.showHelperSetupAlert) {
-            Button(L("alert.helper_setup.open")) {
-                model.openLoginItemsSettings()
+            if model.pendingHelperRetryAction != nil {
+                Button(L("alert.helper_setup.retry")) {
+                    let action = model.pendingHelperRetryAction
+                    model.pendingHelperRetryAction = nil
+                    action?()
+                }
             }
-            Button(L("common.cancel"), role: .cancel) {}
+            Button(L("common.cancel"), role: .cancel) {
+                model.pendingHelperRetryAction = nil
+            }
         } message: {
             Text(L("alert.helper_setup.message"))
         }

@@ -92,7 +92,6 @@ private struct KeyValueRow<Control: View>: View {
 private struct ExternalVolumeWarningView: View {
     @EnvironmentObject private var model: WiredServerViewModel
     let hasFDA: Bool
-    let onOpenSettings: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
@@ -113,7 +112,7 @@ private struct ExternalVolumeWarningView: View {
 
             if !hasFDA {
                 Button(L("fda.open_settings")) {
-                    onOpenSettings()
+                    model.openFullDiskAccessSettings()
                 }
                 .font(.footnote)
                 .disabled(model.isCheckingFDA)
@@ -378,9 +377,7 @@ struct AdvancedTabView: View {
                             .labelsHidden()
 
                             if model.filesDirectoryIsOnExternalVolume {
-                                ExternalVolumeWarningView(hasFDA: model.wired3HasFullDiskAccess) {
-                                    model.openFullDiskAccessSettings()
-                                }
+                                ExternalVolumeWarningView(hasFDA: model.wired3HasFullDiskAccess)
                             }
 
                             if model.filesDirectory.hasPrefix("/Users/") {
@@ -523,9 +520,7 @@ struct FilesTabView: View {
                     }
 
                     if model.installMode == .launchDaemon && model.filesDirectoryIsOnExternalVolume {
-                        ExternalVolumeWarningView(hasFDA: model.wired3HasFullDiskAccess) {
-                            model.openFullDiskAccessSettings()
-                        }
+                        ExternalVolumeWarningView(hasFDA: model.wired3HasFullDiskAccess)
                     }
 
                     if model.installMode == .launchDaemon && model.filesDirectory.hasPrefix("/Users/") {

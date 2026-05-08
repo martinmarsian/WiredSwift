@@ -1,8 +1,8 @@
 "window.title" = "Wired Server";
 "alert.error.title" = "Erreur";
 "alert.helper_setup.title" = "Configuration unique requise";
-"alert.helper_setup.message" = "Wired Server a besoin d'une approbation unique pour gérer le processus serveur. Cliquez sur «Ouvrir les éléments de connexion», puis activez «Wired Server» sous «Autoriser en arrière-plan».";
-"alert.helper_setup.open" = "Ouvrir les éléments de connexion";
+"alert.helper_setup.message" = "Wired Server a besoin d'une approbation unique. Veuillez cliquer sur «Autoriser» dans la notification système qui vient d'apparaître, puis appuyer sur «Réessayer».";
+"alert.helper_setup.retry" = "Réessayer";
 "alert.binary_updated.title" = "Serveur mis à jour";
 "alert.privileged_update.title" = "Mise à jour disponible";
 "alert.privileged_update.message" = "Une nouvelle version du binaire serveur est incluse dans cette application. L'installer maintenant ? Votre mot de passe administrateur sera requis.";
@@ -63,11 +63,11 @@
 
 "general.versions.section" = "Versions";
 
-"fda.check.passed" = "Vérification d'accès daemon réussie.";
+"fda.check.passed" = "Accès disque complet accordé.";
 "fda.external_volume" = "Le répertoire de fichiers est sur un volume externe.";
-"fda.check.passed.detail" = "L'utilisateur daemon semble avoir accès en lecture. Après une mise à jour binaire, la re-signature peut révoquer cet accès — vérifiez le journal serveur pour \"0 files, 0 dirs\".";
-"fda.check.failed.detail" = "Assurez-vous que le répertoire de fichiers est lisible par l'utilisateur daemon, puis cliquez sur Revérifier.";
-"fda.open_settings" = "Ouvrir Accès disque complet…";
+"fda.check.passed.detail" = "Wired Server dispose de l'accès disque complet et peut lire le répertoire de fichiers.";
+"fda.check.failed.detail" = "Wired Server a besoin de l'accès disque complet pour lire le répertoire de fichiers sur ce volume. Cliquez sur «Accès disque complet…», activez Wired Server, puis cliquez sur Revérifier.";
+"fda.open_settings" = "Accès disque complet…";
 "fda.recheck" = "Revérifier";
 "fda.restart_daemon" = "Redémarrer le daemon";
 

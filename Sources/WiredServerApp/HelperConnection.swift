@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import ServiceManagement
 
@@ -59,6 +60,8 @@ final class HelperConnection {
     }
 
     /// Pure SMAppService registration — synchronous, no XPC calls.
+    /// macOS posts a system notification automatically when register() requires approval;
+    /// we don't open System Settings manually so the notification stays in focus.
     private func registerIfNeeded() throws {
         let service = SMAppService.daemon(plistName: "\(kHelperMachServiceName).plist")
         switch service.status {
@@ -71,25 +74,32 @@ final class HelperConnection {
                 do {
                     try service.register()
                 } catch {
+                    if service.status == .requiresApproval {
+                        throw HelperError.mustBeEnabled
+                    }
                     throw HelperError.installFailed(error.localizedDescription)
                 }
                 if service.status == .requiresApproval {
-                    SMAppService.openSystemSettingsLoginItems()
                     throw HelperError.mustBeEnabled
                 }
             }
             return
         case .requiresApproval:
-            SMAppService.openSystemSettingsLoginItems()
             throw HelperError.mustBeEnabled
         case .notRegistered, .notFound:
             do {
                 try service.register()
             } catch {
+                // On macOS 14+, register() can throw "Operation not permitted" while
+                // simultaneously posting the system approval notification. The throw
+                // does NOT mean registration failed — it means the user hasn't approved
+                // yet. Check the actual status before reporting a hard failure.
+                if service.status == .requiresApproval {
+                    throw HelperError.mustBeEnabled
+                }
                 throw HelperError.installFailed(error.localizedDescription)
             }
             if service.status == .requiresApproval {
-                SMAppService.openSystemSettingsLoginItems()
                 throw HelperError.mustBeEnabled
             }
         @unknown default:
@@ -148,10 +158,10 @@ final class HelperConnection {
         }
     }
 
-    func runFDACheck(filesPath: String) async throws -> Bool {
+    func runFDACheck(filesPath: String, daemonUser: String) async throws -> Bool {
         try await withCheckedThrowingContinuation { cont in
             guard let p = xpcProxy(onError: { cont.resume(throwing: $0) }) else { return }
-            p.runFDACheck(filesPath: filesPath) { granted, message in
+            p.runFDACheck(filesPath: filesPath, daemonUser: daemonUser) { granted, message in
                 if message.isEmpty {
                     cont.resume(returning: granted)
                 } else {
@@ -162,10 +172,10 @@ final class HelperConnection {
     }
 
     /// Returns fdaGranted flag.
-    func startDaemon(plistPath: String, label: String, filesPath: String) async throws -> Bool {
+    func startDaemon(plistPath: String, label: String, filesPath: String, daemonUser: String) async throws -> Bool {
         try await withCheckedThrowingContinuation { cont in
             guard let p = xpcProxy(onError: { cont.resume(throwing: $0) }) else { return }
-            p.startDaemon(plistPath: plistPath, label: label, filesPath: filesPath) { success, fdaGranted, message in
+            p.startDaemon(plistPath: plistPath, label: label, filesPath: filesPath, daemonUser: daemonUser) { success, fdaGranted, message in
                 if success {
                     cont.resume(returning: fdaGranted)
                 } else {

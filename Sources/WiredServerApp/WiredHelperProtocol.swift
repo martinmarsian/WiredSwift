@@ -1,7 +1,7 @@
 import Foundation
 
 let kHelperMachServiceName = "fr.read-write.WiredServer3.Helper"
-let kHelperVersion = "2"
+let kHelperVersion = "3"
 
 /// XPC protocol between WiredServerApp and WiredServerHelper.
 /// All parameters are typed and validated; the helper never executes arbitrary code.
@@ -14,18 +14,21 @@ let kHelperVersion = "2"
         withReply reply: @escaping (Bool, String) -> Void
     )
 
-    /// Check whether filesPath is accessible to the wired3 binary using its TCC grant.
+    /// Check whether daemonUser can access filesPath by running wired3 as that user via sudo.
+    /// This tests both POSIX permissions and TCC grants under the correct identity.
     func runFDACheck(
         filesPath: String,
+        daemonUser: String,
         withReply reply: @escaping (Bool, String) -> Void
     )
 
     /// Bootstrap and kickstart the LaunchDaemon. If filesPath is non-empty, also runs a typed
-    /// FDA check via the wired3 binary. Reply: (success, fdaGranted, errorMessage)
+    /// FDA check by executing wired3 as daemonUser. Reply: (success, fdaGranted, errorMessage)
     func startDaemon(
         plistPath: String,
         label: String,
         filesPath: String,
+        daemonUser: String,
         withReply reply: @escaping (Bool, Bool, String) -> Void
     )
 

@@ -83,6 +83,7 @@ final class WiredServerViewModel: ObservableObject {
     @Published var showErrorAlert: Bool = false
     @Published var lastErrorMessage: String = ""
     @Published var showHelperSetupAlert: Bool = false
+    @Published var pendingHelperRetryAction: (() -> Void)? = nil
 
     @Published var showRestartAfterUpdateAlert: Bool = false
     @Published var showPrivilegedUpdateAlert: Bool = false
@@ -388,6 +389,7 @@ final class WiredServerViewModel: ObservableObject {
                 // Show the helper setup alert (which explains what to do) and let the
                 // user retry after approval; do not report this as a migration failure.
                 systemMigrationStatus = L("status.migration.awaiting_helper")
+                pendingHelperRetryAction = { [weak self] in Task { await self?.migrateToSystemDirectory() } }
                 showHelperSetupAlert = true
             } else {
                 systemMigrationStatus = "Migration failed: \(error.localizedDescription)"
@@ -448,16 +450,9 @@ final class WiredServerViewModel: ObservableObject {
         // detecting whether the daemon process is actually running.
         let wasRunning = isDaemonRunning
         isDaemonRunning = runProcess("/usr/bin/pgrep", ["-x", "wired3"]).status == 0
-        // Infer FDA status from running state: if the daemon is up and serving clients,
-        // the TCC grant is clearly in place. Reset to false when it stops so the next
-        // start re-evaluates. A direct XPC-based TCC check is unreliable because TCC
-        // grants are per-user and the helper runs as root with a separate TCC context.
-        if filesDirectoryIsOnExternalVolume {
-            if isDaemonRunning {
-                wired3HasFullDiskAccess = true
-            } else if wasRunning {
-                wired3HasFullDiskAccess = false
-            }
+        // Reset FDA flag when the daemon stops so the next start re-evaluates.
+        if filesDirectoryIsOnExternalVolume && wasRunning && !isDaemonRunning {
+            wired3HasFullDiskAccess = false
         }
         if !daemonAccountsVerified {
             isDaemonUserExists = runProcess("/usr/bin/dscl", [".", "-read", "/Users/\(daemonUserName)"]).status == 0
@@ -477,29 +472,24 @@ final class WiredServerViewModel: ObservableObject {
         return path.hasPrefix("/Volumes/")
     }
 
-    // FDA status inference: if the daemon is running, TCC is clearly OK — the process
-    // is already accessing the volume. A direct XPC check is unreliable because the helper
-    // runs as root and TCC grants are stored per-user; root has a separate TCC database
-    // from _wired, so wired3 spawned as root will always fail the TCC check even when
-    // the grant exists for _wired. Re-check just re-reads the running state.
+    func openFullDiskAccessSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     func refreshFDAStatusPrivileged() {
         guard filesDirectoryIsOnExternalVolume else {
             wired3HasFullDiskAccess = false
             return
         }
-        if isDaemonRunning {
-            wired3HasFullDiskAccess = true
-            return
-        }
-        // Daemon not running: best-effort check via the helper.
-        // The helper runs wired3 --check-access directly; TCC grants are per-binary.
         let filesDir = currentServerRootPath()
         isCheckingFDA = true
         Task { @MainActor in
             defer { isCheckingFDA = false }
             do {
                 try await HelperConnection.shared.installIfNeeded()
-                wired3HasFullDiskAccess = try await HelperConnection.shared.runFDACheck(filesPath: filesDir)
+                wired3HasFullDiskAccess = try await HelperConnection.shared.runFDACheck(filesPath: filesDir, daemonUser: daemonUserName)
             } catch {
                 wired3HasFullDiskAccess = false
                 publishHelperError(L("fda.recheck"), error)
@@ -507,23 +497,13 @@ final class WiredServerViewModel: ObservableObject {
         }
     }
 
-    func openFullDiskAccessSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
-            NSWorkspace.shared.open(url)
-        }
-    }
 
-    func openLoginItemsSettings() {
-        // macOS 13+: General → Login Items
-        if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
-            NSWorkspace.shared.open(url)
-        }
-    }
 
-    /// Publish a helper error and, when the helper needs user approval (error 8 / mustBeEnabled),
-    /// also open System Settings → Privacy & Security → Login Items automatically.
-    private func publishHelperError(_ prefix: String, _ error: Error) {
+    /// Publish a helper error and, when the helper needs user approval (mustBeEnabled),
+    /// show the helper setup alert with an optional retry action.
+    private func publishHelperError(_ prefix: String, _ error: Error, retry: (() -> Void)? = nil) {
         if let he = error as? HelperError, case .mustBeEnabled = he {
+            pendingHelperRetryAction = retry
             showHelperSetupAlert = true
             return
         }
@@ -583,7 +563,8 @@ final class WiredServerViewModel: ObservableObject {
             modeSwitchStatus = L("status.daemon.done")
         } catch {
             modeSwitchStatus = "\(L("error.mode_switch_failed")): \(error.localizedDescription)"
-            publishHelperError(L("error.mode_switch_failed"), error)
+            publishHelperError(L("error.mode_switch_failed"), error,
+                               retry: { [weak self] in Task { await self?.switchInstallMode(to: mode) } })
         }
 
         isSwitchingMode = false
@@ -641,7 +622,8 @@ final class WiredServerViewModel: ObservableObject {
                 let fdaGranted = try await HelperConnection.shared.startDaemon(
                     plistPath: plistPath,
                     label: label,
-                    filesPath: filesPath
+                    filesPath: filesPath,
+                    daemonUser: daemonUserName
                 )
                 if onExternal {
                     wired3HasFullDiskAccess = fdaGranted

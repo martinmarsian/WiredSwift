@@ -1,8 +1,8 @@
 "window.title" = "Wired Server";
 "alert.error.title" = "Fehler";
 "alert.helper_setup.title" = "Einmalige Einrichtung erforderlich";
-"alert.helper_setup.message" = "Wired Server benötigt eine einmalige Genehmigung zur Serververwaltung. Klicke auf \"Anmeldeelemente öffnen\" und aktiviere \"Wired Server\" unter \"Im Hintergrund erlauben\".";
-"alert.helper_setup.open" = "Anmeldeelemente öffnen";
+"alert.helper_setup.message" = "Wired Server benötigt eine einmalige Genehmigung. Bitte klicke in der Systemnotification auf \"Erlauben\" und dann auf \"Erneut versuchen\".";
+"alert.helper_setup.retry" = "Erneut versuchen";
 "alert.binary_updated.title" = "Server aktualisiert";
 "alert.binary_updated.message" = "Eine neue Version der Server-Binary wurde installiert. Der laufende Server verwendet noch die alte Version. Möchten Sie ihn jetzt neu starten?";
 "alert.binary_updated.restart" = "Jetzt neu starten";
@@ -63,11 +63,11 @@
 
 "general.versions.section" = "Versionen";
 
-"fda.check.passed" = "Daemon-Zugriffsprüfung erfolgreich.";
+"fda.check.passed" = "Festplattenvollzugriff erteilt.";
 "fda.external_volume" = "Dateiverzeichnis liegt auf einem externen Volume.";
-"fda.check.passed.detail" = "Der Daemon-Benutzer hat scheinbar Lesezugriff. Nach einem Binary-Update kann eine Neusignierung diesen Zugriff entziehen — prüfe das Server-Protokoll auf \"0 files, 0 dirs\".";
-"fda.check.failed.detail" = "Sicherstellen, dass das Dateiverzeichnis für den Daemon-Benutzer lesbar ist, dann auf \"Erneut prüfen\" klicken.";
-"fda.open_settings" = "Festplattenvollzugriff öffnen…";
+"fda.check.passed.detail" = "Wired Server hat Festplattenvollzugriff und kann das Dateiverzeichnis lesen.";
+"fda.check.failed.detail" = "Wired Server benötigt Festplattenvollzugriff um das Dateiverzeichnis auf diesem Volume zu lesen. Auf \"Festplattenvollzugriff…\" klicken, Wired Server aktivieren, dann auf \"Erneut prüfen\" klicken.";
+"fda.open_settings" = "Festplattenvollzugriff…";
 "fda.recheck" = "Erneut prüfen";
 "fda.restart_daemon" = "Daemon neu starten";
 
