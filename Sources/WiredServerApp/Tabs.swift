@@ -356,7 +356,7 @@ struct AdvancedTabView: View {
                                 TextField("_wired", text: $model.daemonUserName)
                                     .textFieldStyle(.roundedBorder)
                                     .frame(width: 100)
-                                    .disabled(model.isSwitchingMode)
+                                    .disabled(model.isSwitchingMode || model.isDaemonRunning)
                                 Image(systemName: model.isDaemonUserExists ? "person.fill.checkmark" : "person.fill.xmark")
                                     .foregroundStyle(model.isDaemonUserExists ? .green : .secondary)
 
@@ -366,15 +366,21 @@ struct AdvancedTabView: View {
                                 TextField("daemon", text: $model.daemonGroupName)
                                     .textFieldStyle(.roundedBorder)
                                     .frame(width: 100)
-                                    .disabled(model.isSwitchingMode)
+                                    .disabled(model.isSwitchingMode || model.isDaemonRunning)
                                 Image(systemName: model.isDaemonGroupExists ? "checkmark.circle.fill" : "xmark.circle")
                                     .foregroundStyle(model.isDaemonGroupExists ? .green : .secondary)
 
                                 Spacer()
                                 Button(L("common.save")) { model.saveDaemonSettings() }
-                                    .disabled(model.isSwitchingMode)
+                                    .disabled(model.isSwitchingMode || model.isDaemonRunning)
                             }
                             .labelsHidden()
+
+                            if model.isDaemonRunning {
+                                Text(L("general.install_mode.daemon_running_hint"))
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
 
                             if model.filesDirectoryIsOnExternalVolume {
                                 ExternalVolumeWarningView(hasFDA: model.wired3HasFullDiskAccess)

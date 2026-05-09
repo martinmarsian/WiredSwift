@@ -61,6 +61,7 @@
 "general.install_mode.launch_daemon" = "LaunchDaemon (system service)";
 "general.install_mode.daemon_user" = "Daemon User";
 "general.install_mode.group" = "Group";
+"general.install_mode.daemon_running_hint" = "Stop the daemon to change the user and group.";
 
 "general.versions.section" = "Versions";
 
