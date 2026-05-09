@@ -283,18 +283,9 @@ final class WiredServerViewModel: ObservableObject {
                 publishError("\(L("error.install_failed")): \(error.localizedDescription)")
             }
         } else if installMode == .launchDaemon && !isDaemonRunning {
-            if canWrite {
-                // bin/ is staff-writable — auto-update in-place while daemon is stopped.
-                do {
-                    binaryWasUpdated = try synchronizeInstalledBinaryIfNeeded(allowInstallIfMissing: false)
-                } catch {
-                    publishError("\(L("error.install_failed")): \(error.localizedDescription)")
-                }
-            } else {
-                // bin/ is root-owned — offer privileged install via helper.
-                if !showPrivilegedUpdateAlert, isBinaryUpdateAvailable() {
-                    showPrivilegedUpdateAlert = true
-                }
+            // LaunchDaemon mode: always ask before updating — regardless of write access.
+            if !showPrivilegedUpdateAlert, isBinaryUpdateAvailable() {
+                showPrivilegedUpdateAlert = true
             }
         }
         refreshInstallStatus()
@@ -1737,11 +1728,17 @@ final class WiredServerViewModel: ObservableObject {
     /// Only safe to call when the daemon is confirmed stopped.
     func applyPrivilegedUpdate() {
         guard let src = bundledServerBinaryPath() else { return }
+        let binDir = URL(fileURLWithPath: installedBinaryPath).deletingLastPathComponent().path
+        let canWrite = fileManager.isWritableFile(atPath: binDir)
         Task { @MainActor in
             do {
-                try await HelperConnection.shared.installIfNeeded()
-                try await HelperConnection.shared.copyBinary(sourcePath: src)
-                appendRuntimeLog("binary-update: privileged update applied")
+                if canWrite {
+                    _ = try synchronizeInstalledBinaryIfNeeded(allowInstallIfMissing: true)
+                } else {
+                    try await HelperConnection.shared.installIfNeeded()
+                    try await HelperConnection.shared.copyBinary(sourcePath: src)
+                }
+                appendRuntimeLog("binary-update: update applied")
                 showPrivilegedUpdateAlert = false
                 refreshInstallStatus()
                 refreshInstalledVersion()
