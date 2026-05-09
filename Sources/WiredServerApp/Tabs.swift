@@ -590,6 +590,14 @@ struct DatabaseTabView: View {
                     Text(L("database.snapshot.help"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+
+                    HStack {
+                        Spacer(minLength: 0)
+                        Button(L("database.snapshot.trigger_now")) {
+                            model.triggerManualSnapshot()
+                        }
+                        .disabled(!model.isServerActive)
+                    }
                 }
 
                 Section(L("database.events.section")) {
