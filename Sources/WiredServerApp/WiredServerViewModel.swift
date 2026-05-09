@@ -282,11 +282,19 @@ final class WiredServerViewModel: ObservableObject {
             } catch {
                 publishError("\(L("error.install_failed")): \(error.localizedDescription)")
             }
-        } else if installMode == .launchDaemon && !isDaemonRunning && !canWrite {
-            // LaunchDaemon mode: bin dir is root-owned. When the daemon is stopped,
-            // detect if an update is available and offer a privileged install via alert.
-            if !showPrivilegedUpdateAlert, isBinaryUpdateAvailable() {
-                showPrivilegedUpdateAlert = true
+        } else if installMode == .launchDaemon && !isDaemonRunning {
+            if canWrite {
+                // bin/ is staff-writable — auto-update in-place while daemon is stopped.
+                do {
+                    binaryWasUpdated = try synchronizeInstalledBinaryIfNeeded(allowInstallIfMissing: false)
+                } catch {
+                    publishError("\(L("error.install_failed")): \(error.localizedDescription)")
+                }
+            } else {
+                // bin/ is root-owned — offer privileged install via helper.
+                if !showPrivilegedUpdateAlert, isBinaryUpdateAvailable() {
+                    showPrivilegedUpdateAlert = true
+                }
             }
         }
         refreshInstallStatus()
