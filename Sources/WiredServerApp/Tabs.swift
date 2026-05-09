@@ -593,6 +593,11 @@ struct DatabaseTabView: View {
 
                     HStack {
                         Spacer(minLength: 0)
+                        if model.snapshotConfirmed {
+                            Text(L("status.snapshot_triggered"))
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                         Button(L("database.snapshot.trigger_now")) {
                             model.triggerManualSnapshot()
                         }
