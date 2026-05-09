@@ -79,6 +79,7 @@ final class WiredServerViewModel: ObservableObject {
 
     @Published var isBusy: Bool = false
     @Published var statusMessage: String = ""
+    @Published var snapshotConfirmed: Bool = false
 
     @Published var showErrorAlert: Bool = false
     @Published var lastErrorMessage: String = ""
@@ -2090,6 +2091,7 @@ final class WiredServerViewModel: ObservableObject {
                 do {
                     try await HelperConnection.shared.triggerSnapshot(pidPath: pidPath)
                     statusMessage = L("status.snapshot_triggered")
+                    flashSnapshotConfirmed()
                 } catch {
                     publishHelperError(L("error.helper.operation_failed"), error)
                 }
@@ -2097,9 +2099,18 @@ final class WiredServerViewModel: ObservableObject {
         } else {
             if sendSignal(SIGUSR2) {
                 statusMessage = L("status.snapshot_triggered")
+                flashSnapshotConfirmed()
             } else {
                 statusMessage = L("status.snapshot_failed")
             }
+        }
+    }
+
+    private func flashSnapshotConfirmed() {
+        snapshotConfirmed = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            snapshotConfirmed = false
         }
     }
 
