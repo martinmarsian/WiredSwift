@@ -1,7 +1,7 @@
 import Foundation
 
 let kHelperMachServiceName = "fr.read-write.WiredServer3.Helper"
-let kHelperVersion = "3"
+let kHelperVersion = "4"
 
 /// XPC protocol between WiredServerApp and WiredServerHelper.
 /// All parameters are typed and validated; the helper never executes arbitrary code.
@@ -69,6 +69,10 @@ let kHelperVersion = "3"
         sourcePath: String,
         withReply reply: @escaping (Bool, String) -> Void
     )
+
+    /// Send SIGUSR2 to the wired3 process identified by the PID file at pidPath.
+    /// Used to trigger an on-demand database snapshot when the daemon runs as a different user.
+    func triggerSnapshot(pidPath: String, withReply reply: @escaping (Bool, String) -> Void)
 
     /// Returns kHelperVersion — used to detect when the helper needs updating.
     func getVersion(withReply reply: @escaping (String) -> Void)

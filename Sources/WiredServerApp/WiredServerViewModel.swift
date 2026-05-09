@@ -2078,6 +2078,31 @@ final class WiredServerViewModel: ObservableObject {
         sendSignal(SIGUSR1)
     }
 
+    func triggerManualSnapshot() {
+        guard isServerActive else {
+            statusMessage = L("status.snapshot_not_running")
+            return
+        }
+        if installMode == .launchDaemon {
+            let pidPath = URL(fileURLWithPath: workingDirectory)
+                .appendingPathComponent("wired3.pid").path
+            Task { @MainActor in
+                do {
+                    try await HelperConnection.shared.triggerSnapshot(pidPath: pidPath)
+                    statusMessage = L("status.snapshot_triggered")
+                } catch {
+                    publishHelperError(L("error.helper.operation_failed"), error)
+                }
+            }
+        } else {
+            if sendSignal(SIGUSR2) {
+                statusMessage = L("status.snapshot_triggered")
+            } else {
+                statusMessage = L("status.snapshot_failed")
+            }
+        }
+    }
+
     /// Read the PID file and send `signal` to the running wired3 process.
     @discardableResult
     private func sendSignal(_ signal: Int32) -> Bool {

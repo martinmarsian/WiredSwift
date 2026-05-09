@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 final class HelperDelegate: NSObject, WiredHelperProtocol {
@@ -169,6 +170,25 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
             run("/usr/bin/dscl", [".", "-delete", "/Groups/\(group)"])
         }
 
+        reply(true, "")
+    }
+
+    // MARK: - Signal
+
+    func triggerSnapshot(pidPath: String, withReply reply: @escaping (Bool, String) -> Void) {
+        guard pidPath.hasPrefix("/Library/"), !pidPath.contains("..") else {
+            return reply(false, "Invalid pidPath")
+        }
+        guard let pidString = try? String(contentsOfFile: pidPath, encoding: .utf8) else {
+            return reply(false, "PID file not found at \(pidPath)")
+        }
+        let trimmed = pidString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let pid = pid_t(trimmed) else {
+            return reply(false, "Invalid PID in file")
+        }
+        guard kill(pid, SIGUSR2) == 0 else {
+            return reply(false, "kill(\(pid), SIGUSR2) failed: \(String(cString: strerror(errno)))")
+        }
         reply(true, "")
     }
 

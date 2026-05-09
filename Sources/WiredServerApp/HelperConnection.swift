@@ -107,23 +107,25 @@ final class HelperConnection {
         }
     }
 
-    /// If the running helper has an outdated protocol version, bootout and re-register so
-    /// launchd starts the new binary on the next XPC connection.
+    /// If the running helper has an outdated protocol version, kill its process so launchd
+    /// starts the new binary from the registered path on the next XPC connection.
+    /// We intentionally do NOT bootout + re-register: bootout removes the SMAppService
+    /// registration which can only be restored by the installed app bundle, not a dev build.
     private func restartIfOutdated() async {
         let version = (try? await getVersion()) ?? ""
         guard version != kHelperVersion else { return }
-        NSLog("[HelperConnection] Helper version '%@' ≠ expected '%@', restarting…", version, kHelperVersion)
+        NSLog("[HelperConnection] Helper version '%@' ≠ expected '%@', killing process…", version, kHelperVersion)
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        p.arguments = ["bootout", "system/\(kHelperMachServiceName)"]
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+        p.arguments = ["-x", kHelperMachServiceName]
         p.standardOutput = FileHandle.nullDevice
         p.standardError = FileHandle.nullDevice
         try? p.run()
         p.waitUntilExit()
         _connection?.invalidate()
         _connection = nil
-        // Re-register so launchd will start the new binary on the next connection attempt.
-        try? registerIfNeeded()
+        // Brief pause so launchd can clean up before the next connection demand-starts the new binary.
+        try? await Task.sleep(nanoseconds: 500_000_000)
     }
 
 
@@ -214,6 +216,12 @@ final class HelperConnection {
     func copyBinary(sourcePath: String) async throws {
         try await boolReply { p, cont in
             p.copyBinary(sourcePath: sourcePath, withReply: cont)
+        }
+    }
+
+    func triggerSnapshot(pidPath: String) async throws {
+        try await boolReply { p, cont in
+            p.triggerSnapshot(pidPath: pidPath, withReply: cont)
         }
     }
 

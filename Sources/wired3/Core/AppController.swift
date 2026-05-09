@@ -331,7 +331,7 @@ public class AppController {
         timer.resume()
     }
 
-    private func createDatabaseSnapshot() {
+    func createDatabaseSnapshot() {
         guard let databaseController = self.databaseController else { return }
 
         do {
