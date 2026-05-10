@@ -107,21 +107,19 @@ final class HelperConnection {
         }
     }
 
-    /// If the running helper has an outdated protocol version, kill its process so launchd
-    /// starts the new binary from the registered path on the next XPC connection.
-    /// We intentionally do NOT bootout + re-register: bootout removes the SMAppService
-    /// registration which can only be restored by the installed app bundle, not a dev build.
+    /// If the running helper has an outdated protocol version, ask it to exit via XPC so
+    /// launchd demand-starts the new binary on the next connection. Using pkill from the
+    /// app process fails silently because the helper runs as root and a non-root app cannot
+    /// send signals to root processes.
     private func restartIfOutdated() async {
         let version = (try? await getVersion()) ?? ""
         guard version != kHelperVersion else { return }
-        NSLog("[HelperConnection] Helper version '%@' ≠ expected '%@', killing process…", version, kHelperVersion)
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        p.arguments = ["-x", kHelperMachServiceName]
-        p.standardOutput = FileHandle.nullDevice
-        p.standardError = FileHandle.nullDevice
-        try? p.run()
-        p.waitUntilExit()
+        NSLog("[HelperConnection] Helper version '%@' ≠ expected '%@', asking helper to terminate…", version, kHelperVersion)
+        // Ask the helper to exit via XPC — it runs as root and can terminate itself.
+        _ = try? await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            guard let p = xpcProxy(onError: { cont.resume(throwing: $0) }) else { return }
+            p.terminate { cont.resume() }
+        }
         _connection?.invalidate()
         _connection = nil
         // Brief pause so launchd can clean up before the next connection demand-starts the new binary.

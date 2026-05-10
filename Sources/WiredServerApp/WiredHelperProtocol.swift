@@ -1,7 +1,7 @@
 import Foundation
 
 let kHelperMachServiceName = "fr.read-write.WiredServer3.Helper"
-let kHelperVersion = "4"
+let kHelperVersion = "6"
 
 /// XPC protocol between WiredServerApp and WiredServerHelper.
 /// All parameters are typed and validated; the helper never executes arbitrary code.
@@ -76,4 +76,8 @@ let kHelperVersion = "4"
 
     /// Returns kHelperVersion — used to detect when the helper needs updating.
     func getVersion(withReply reply: @escaping (String) -> Void)
+
+    /// Ask the helper to exit so launchd demand-starts the updated binary on the next call.
+    /// The helper replies before exiting so the caller can detect completion.
+    func terminate(withReply reply: @escaping () -> Void)
 }

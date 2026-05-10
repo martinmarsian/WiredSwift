@@ -9,6 +9,15 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
         reply(kHelperVersion)
     }
 
+    func terminate(withReply reply: @escaping () -> Void) {
+        diagLog("[Helper] terminate requested — exiting for update")
+        reply()
+        // Brief delay so the XPC reply is flushed before the process exits.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            Foundation.exit(0)
+        }
+    }
+
     // MARK: - System directory
 
     func createSystemDirectory(path: String, owner: String,
@@ -33,14 +42,11 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
         guard isAbsolutePath(filesPath), isValidAccount(daemonUser) else {
             return reply(false, "Invalid parameters")
         }
-        let wired3 = "/Library/Wired3/bin/wired3"
-        guard FileManager.default.isExecutableFile(atPath: wired3) else {
-            return reply(false, "wired3 binary not found at \(wired3)")
+        let wired3Binary = "/Library/Wired3/bin/wired3"
+        guard FileManager.default.isExecutableFile(atPath: wired3Binary) else {
+            return reply(false, "wired3 binary not found at \(wired3Binary)")
         }
-        // Run wired3 as the daemon user so TCC evaluates the grant for wired3's
-        // code signature under the daemon identity — not as root which bypasses TCC.
-        let status = run("/usr/bin/sudo", ["-n", "-u", daemonUser, wired3, "--check-access", filesPath])
-        reply(status == 0, "")
+        reply(queryTCCFullDiskAccess(for: wired3Binary), "")
     }
 
     // MARK: - Daemon lifecycle
@@ -58,9 +64,9 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
             guard isAbsolutePath(filesPath), isValidAccount(daemonUser) else {
                 return reply(false, false, "Invalid filesPath or daemonUser")
             }
-            let wired3 = "/Library/Wired3/bin/wired3"
-            if FileManager.default.isExecutableFile(atPath: wired3) {
-                fdaGranted = run("/usr/bin/sudo", ["-n", "-u", daemonUser, wired3, "--check-access", filesPath]) == 0
+            let wired3Binary = "/Library/Wired3/bin/wired3"
+            if FileManager.default.isExecutableFile(atPath: wired3Binary) {
+                fdaGranted = queryTCCFullDiskAccess(for: wired3Binary)
             }
         }
 
@@ -286,6 +292,67 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
         } catch {
             return false
         }
+    }
+
+    // MARK: - TCC query
+
+    /// Returns true if wired3 has Full Disk Access in the system TCC database.
+    ///
+    /// Using `sudo -n -u _wiredserver wired3 --check-access` gives false positives:
+    /// a subprocess spawned from a root XPC helper bypasses TCC, while launchd correctly
+    /// enforces TCC when starting the same binary as a daemon. Querying the database
+    /// directly gives the authoritative grant status that launchd will enforce.
+    private func queryTCCFullDiskAccess(for binaryPath: String) -> Bool {
+        let tccDB = "/Library/Application Support/com.apple.TCC/TCC.db"
+        guard FileManager.default.fileExists(atPath: tccDB) else {
+            diagLog("[FDA] TCC DB not found")
+            return false
+        }
+
+        let escapedPath = binaryPath.replacingOccurrences(of: "'", with: "''")
+
+        // Try 1: path-based entry (client_type 1), used when the binary is dragged into
+        // System Settings → Privacy → Full Disk Access or triggered a TCC prompt by path.
+        let pathQuery = "SELECT client,auth_value FROM access WHERE service='kTCCServiceSystemPolicyAllFiles' AND client='\(escapedPath)' AND client_type=1 LIMIT 1"
+        let (pathOut, pathCode) = runCapturing("/usr/bin/sqlite3", [tccDB, pathQuery])
+        diagLog("[FDA] path-query exit=\(pathCode) out='\(pathOut)'")
+        if pathCode == 0, !pathOut.isEmpty {
+            let granted = pathOut.hasSuffix("|2")
+            diagLog("[FDA] path-based result: \(granted)")
+            return granted
+        }
+
+        // Try 2: code-signature identifier entry (client_type 0), used for signed binaries.
+        // The identifier ends in the product name (e.g. "fr.read-write.wired3").
+        let idQuery = "SELECT client,auth_value FROM access WHERE service='kTCCServiceSystemPolicyAllFiles' AND client_type=0 AND client LIKE '%wired3' LIMIT 1"
+        let (idOut, idCode) = runCapturing("/usr/bin/sqlite3", [tccDB, idQuery])
+        diagLog("[FDA] id-query exit=\(idCode) out='\(idOut)'")
+        if idCode == 0, !idOut.isEmpty {
+            let granted = idOut.hasSuffix("|2")
+            diagLog("[FDA] id-based result: \(granted)")
+            return granted
+        }
+
+        // No matching TCC entry — FDA was never granted.
+        diagLog("[FDA] no TCC entry found → false")
+        return false
+    }
+
+    @discardableResult
+    private func runCapturing(_ path: String, _ args: [String]) -> (output: String, exitCode: Int32) {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: path)
+        p.arguments = args
+        let outPipe = Pipe()
+        let errPipe = Pipe()
+        p.standardOutput = outPipe
+        p.standardError = errPipe
+        try? p.run()
+        p.waitUntilExit()
+        let raw = outPipe.fileHandleForReading.readDataToEndOfFile()
+        let output = (String(data: raw, encoding: .utf8) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (output, p.terminationStatus)
     }
 
     private func isValidAccount(_ name: String) -> Bool {
