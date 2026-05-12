@@ -38,10 +38,12 @@ public class Url: NSObject {
 
     private func decompose() {
         if let u = URL(string: self.base) {
+            // URL.user/password return the percent-encoded form; URLComponents returns decoded values.
+            let comps = URLComponents(url: u, resolvingAgainstBaseURL: false)
             self.hostname   = u.host!
             self.port       = u.port ?? Wired.wiredPort
-            self.login      = u.user ?? "guest"
-            self.password   = u.password ?? ""
+            self.login      = comps?.user ?? "guest"
+            self.password   = comps?.password ?? ""
             self.scheme     = u.scheme!
         } else {
             Logger.error("ERROR: Invalid URL")
