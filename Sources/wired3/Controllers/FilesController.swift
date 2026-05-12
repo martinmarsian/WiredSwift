@@ -628,6 +628,15 @@ public class FilesController {
             return
         }
 
+        // Prevent privilege escalation: block a non-owner from assigning themselves as owner,
+        // which would grant new read access to the folder.
+        if let existingPrivileges = FilePrivilege(path: realPath) {
+            if existingPrivileges.owner != user.username && owner == user.username {
+                App.serverController.replyError(client: client, error: "wired.error.permission_denied", message: message)
+                return
+            }
+        }
+
         var mode: File.FilePermissions = []
         if ownerRead { mode.insert(.ownerRead) }
         if ownerWrite { mode.insert(.ownerWrite) }
