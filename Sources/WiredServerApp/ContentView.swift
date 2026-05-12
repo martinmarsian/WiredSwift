@@ -60,12 +60,18 @@ struct ContentView: View {
             Text(L("alert.helper_setup.message"))
         }
         .alert(L("alert.binary_updated.title"), isPresented: $model.showRestartAfterUpdateAlert) {
-            Button(L("alert.binary_updated.restart")) {
-                Task { await model.restartServer() }
+            Button(model.isRunning ? L("alert.binary_updated.restart") : L("alert.binary_updated.start")) {
+                Task {
+                    if model.isRunning {
+                        await model.restartServer()
+                    } else {
+                        await model.startServer()
+                    }
+                }
             }
             Button(L("alert.binary_updated.later"), role: .cancel) {}
         } message: {
-            Text(L("alert.binary_updated.message"))
+            Text(model.isRunning ? L("alert.binary_updated.message") : L("alert.binary_updated.message.stopped"))
         }
         .alert(L("alert.privileged_update.title"), isPresented: $model.showPrivilegedUpdateAlert) {
             Button(L("alert.privileged_update.install")) {
