@@ -52,6 +52,8 @@ public class ServerIdentity: ServerIdentityProvider {
         self.keyFilePath = keyPath
         self.strictIdentity = strictIdentity
 
+        let pubPath = (workingDirectory as NSString).appendingPathComponent("wired-identity.pub")
+
         if FileManager.default.fileExists(atPath: keyPath) {
             guard let rawData = try? Data(contentsOf: URL(fileURLWithPath: keyPath)),
                   let pk = try? P256.Signing.PrivateKey(rawRepresentation: rawData) else {
@@ -59,6 +61,10 @@ public class ServerIdentity: ServerIdentityProvider {
                 return nil
             }
             privateKey = pk
+            // Write the world-readable .pub file if it is absent (upgrade path).
+            if !FileManager.default.fileExists(atPath: pubPath) {
+                ServerIdentity.writePubFile(at: pubPath, publicKey: pk.publicKey.rawRepresentation)
+            }
         } else {
             let pk = P256.Signing.PrivateKey()
             do {
@@ -75,18 +81,10 @@ public class ServerIdentity: ServerIdentityProvider {
                 return nil
             }
             privateKey = pk
+            // Write a world-readable companion .pub file so the GUI (running as a different user
+            // in LaunchDaemon mode) can display the fingerprint without accessing the private key.
+            ServerIdentity.writePubFile(at: pubPath, publicKey: pk.publicKey.rawRepresentation)
         }
-
-        // Write a world-readable public key companion file so the GUI (running as the logged-in user)
-        // can display the fingerprint without needing to read the restricted private key file.
-        let pubPath = (workingDirectory as NSString).appendingPathComponent("wired-identity.pub")
-        try? privateKey.publicKey.rawRepresentation.write(
-            to: URL(fileURLWithPath: pubPath), options: .atomic
-        )
-        try? FileManager.default.setAttributes(
-            [.posixPermissions: 0o644 as NSNumber],
-            ofItemAtPath: pubPath
-        )
 
         fingerprint = ServerIdentity.computeFingerprint(privateKey.publicKey.rawRepresentation)
     }
@@ -130,15 +128,15 @@ public class ServerIdentity: ServerIdentityProvider {
         return format(fingerprint: fp)
     }
 
-    /// Load the raw P256 public key from a companion .pub file (world-readable, 0644)
-    /// and return its formatted fingerprint, or nil if the file is missing or invalid.
-    /// Prefer this over fingerprintFromKeyFile when running as a different user than the daemon.
+    /// Load the raw P256 public key from a world-readable `.pub` companion file and return its
+    /// formatted fingerprint, or nil if the file doesn't exist or has unexpected size.
+    /// Used by GUI code running as a different OS user than the server daemon.
     public static func fingerprintFromPublicKeyFile(at path: String) -> String? {
         guard let rawData = try? Data(contentsOf: URL(fileURLWithPath: path)),
-              let pk = try? P256.Signing.PublicKey(rawRepresentation: rawData) else {
+              rawData.count == 64 else {
             return nil
         }
-        let fp = computeFingerprint(pk.rawRepresentation)
+        let fp = computeFingerprint(rawData)
         return format(fingerprint: fp)
     }
 
@@ -149,6 +147,22 @@ public class ServerIdentity: ServerIdentityProvider {
             return nil
         }
         return pk.publicKey.rawRepresentation.base64EncodedData()
+    }
+
+    // MARK: - Private helpers
+
+    /// Write the raw public key bytes to a world-readable companion file (0644).
+    private static func writePubFile(at path: String, publicKey: Data) {
+        do {
+            let pubURL = URL(fileURLWithPath: path)
+            try publicKey.write(to: pubURL, options: .atomic)
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o644 as NSNumber],
+                ofItemAtPath: path
+            )
+        } catch {
+            Logger.error("ServerIdentity: failed to write public key companion file at \(path): \(error)")
+        }
     }
 
     /// Format a hex fingerprint as "SHA256:xx:xx:xx:…"
