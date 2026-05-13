@@ -56,7 +56,7 @@ struct Wired: ParsableCommand {
     var overwrite = false
 
     @Option(name: .customLong("check-access"),
-            help: "Test whether this binary can read the given path, then exit (0 = ok, 1 = denied). Used by WiredServerApp for FDA status checks.")
+            help: "Check read access to the given path (for TCC/FDA validation) and exit 0 or 1")
     var checkAccess: String?
 
     @Argument(help: "Optional working directory path. For compatibility, an .xml path here is treated as the specification file path.")
@@ -163,20 +163,10 @@ struct Wired: ParsableCommand {
         }
         sigusr1Source.resume()
 
-        // Install SIGUSR2 handler for on-demand database snapshot.
-        signal(SIGUSR2, SIG_IGN)
-        let sigusr2Source = DispatchSource.makeSignalSource(signal: SIGUSR2, queue: DispatchQueue.global())
-        sigusr2Source.setEventHandler {
-            Logger.info("SIGUSR2 received, triggering database snapshot...")
-            App.createDatabaseSnapshot()
-        }
-        sigusr2Source.resume()
-
         App.start()
 
         sighupSource.cancel()
         sigusr1Source.cancel()
-        sigusr2Source.cancel()
         try? FileManager.default.removeItem(atPath: resolved.pidPath)
     }
 
