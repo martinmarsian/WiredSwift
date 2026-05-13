@@ -28,6 +28,8 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          use_sticky_comment: "true"
+          track_progress: "true"
           claude_args: "--model claude-sonnet-4-6"
           prompt: |
             Tu es le relecteur officiel de WiredSwift — la bibliothèque Swift et
