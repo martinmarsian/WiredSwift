@@ -155,7 +155,15 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
             let deleteGroup = config["deleteGroup"] as? Bool
         else { return reply(false, "Invalid configuration") }
 
-        run("/bin/launchctl", ["bootout", "system/\(label)"])
+        let bootoutStatus = run("/bin/launchctl", ["bootout", "system/\(label)"])
+        if bootoutStatus != 0 {
+            // Non-zero can mean the job was already stopped — verify before failing.
+            let stillRunning = run("/bin/launchctl", ["print", "system/\(label)"]) == 0
+            if stillRunning {
+                return reply(false, "Failed to stop daemon — launchctl bootout exited \(bootoutStatus)")
+            }
+            diagLog("launchctl bootout exited \(bootoutStatus) — job already stopped, continuing cleanup")
+        }
         Thread.sleep(forTimeInterval: 1.0)    // let daemon flush WAL before chown
         try? FileManager.default.removeItem(atPath: plistPath)
         run("/usr/sbin/chown", ["-R", "\(restoreUser):staff", dataPath])
@@ -166,10 +174,12 @@ final class HelperDelegate: NSObject, WiredHelperProtocol {
         if deleteUser {
             run("/usr/bin/pkill", ["-u", user])
             Thread.sleep(forTimeInterval: 0.3)
-            run("/usr/bin/dscl", [".", "-delete", "/Users/\(user)"])
+            let dsclUser = run("/usr/bin/dscl", [".", "-delete", "/Users/\(user)"])
+            if dsclUser != 0 { diagLog("dscl delete user '\(user)' exited \(dsclUser)") }
         }
         if deleteGroup {
-            run("/usr/bin/dscl", [".", "-delete", "/Groups/\(group)"])
+            let dsclGroup = run("/usr/bin/dscl", [".", "-delete", "/Groups/\(group)"])
+            if dsclGroup != 0 { diagLog("dscl delete group '\(group)' exited \(dsclGroup)") }
         }
 
         reply(true, "")
