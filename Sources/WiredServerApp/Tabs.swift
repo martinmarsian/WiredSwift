@@ -92,7 +92,6 @@ private struct KeyValueRow<Control: View>: View {
 private struct ExternalVolumeWarningView: View {
     @EnvironmentObject private var model: WiredServerViewModel
     let hasFDA: Bool
-    let onOpenSettings: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
@@ -104,42 +103,43 @@ private struct ExternalVolumeWarningView: View {
                 Text(hasFDA ? L("fda.check.passed") : L("fda.external_volume"))
                     .font(.footnote).bold()
                     .foregroundStyle(hasFDA ? Color.primary : Color.orange)
-                Text(hasFDA
-                    ? L("fda.check.passed.detail")
-                    : L("fda.check.failed.detail")
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                Text(hasFDA ? L("fda.check.passed.detail") : L("fda.check.failed.detail"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
 
             if !hasFDA {
-                VStack(alignment: .trailing, spacing: 6) {
-                    Button(L("fda.open_settings")) {
-                        onOpenSettings()
-                    }
-                    .font(.footnote)
+                Button(L("fda.open_settings")) {
+                    model.openFullDiskAccessSettings()
+                }
+                .font(.footnote)
+                .disabled(model.isCheckingFDA)
 
+                if model.isCheckingFDA {
+                    ProgressView().controlSize(.small)
+                } else {
                     Button(L("fda.recheck")) {
                         model.refreshFDAStatusPrivileged()
                     }
                     .font(.footnote)
-
-                    Button(L("fda.restart_daemon")) {
-                        model.stopDaemon()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                            model.startDaemon()
-                        }
-                    }
-                    .font(.footnote)
-                    .disabled(!model.isDaemonRunning)
                 }
+
+                Button(L("fda.restart_daemon")) {
+                    model.stopDaemon()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        model.startDaemon()
+                    }
+                }
+                .font(.footnote)
+                .disabled(!model.isDaemonRunning || model.isCheckingFDA)
             }
         }
         .padding(8)
         .background((hasFDA ? Color.green : Color.orange).opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 6))
+        .onAppear { model.refreshFDAStatusPrivileged() }
     }
 }
 
@@ -356,7 +356,7 @@ struct AdvancedTabView: View {
                                 TextField("_wired", text: $model.daemonUserName)
                                     .textFieldStyle(.roundedBorder)
                                     .frame(width: 100)
-                                    .disabled(model.isSwitchingMode)
+                                    .disabled(model.isSwitchingMode || model.isDaemonRunning)
                                 Image(systemName: model.isDaemonUserExists ? "person.fill.checkmark" : "person.fill.xmark")
                                     .foregroundStyle(model.isDaemonUserExists ? .green : .secondary)
 
@@ -366,20 +366,30 @@ struct AdvancedTabView: View {
                                 TextField("daemon", text: $model.daemonGroupName)
                                     .textFieldStyle(.roundedBorder)
                                     .frame(width: 100)
-                                    .disabled(model.isSwitchingMode)
+                                    .disabled(model.isSwitchingMode || model.isDaemonRunning)
                                 Image(systemName: model.isDaemonGroupExists ? "checkmark.circle.fill" : "xmark.circle")
                                     .foregroundStyle(model.isDaemonGroupExists ? .green : .secondary)
 
                                 Spacer()
                                 Button(L("common.save")) { model.saveDaemonSettings() }
-                                    .disabled(model.isSwitchingMode)
+                                    .disabled(model.isSwitchingMode || model.isDaemonRunning)
                             }
                             .labelsHidden()
 
+                            if model.isDaemonRunning {
+                                Text(L("general.install_mode.daemon_running_hint"))
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+
                             if model.filesDirectoryIsOnExternalVolume {
-                                ExternalVolumeWarningView(hasFDA: model.wired3HasFullDiskAccess) {
-                                    model.openFullDiskAccessSettings()
-                                }
+                                ExternalVolumeWarningView(hasFDA: model.wired3HasFullDiskAccess)
+                            }
+
+                            if model.filesDirectory.hasPrefix("/Users/") {
+                                Label(L("advanced.daemon.userpath_warning"), systemImage: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                                    .font(.footnote)
                             }
 
                             HStack {
@@ -411,54 +421,50 @@ struct AdvancedTabView: View {
 struct NetworkTabView: View {
     @EnvironmentObject private var model: WiredServerViewModel
     @State private var portText: String = ""
-    @State private var showPortCheckConsent = false
 
     var body: some View {
         SettingsScrollPane {
-            SettingsSection(title: L("network.section")) {
-                HStack(spacing: 8) {
-                    Text(L("network.port"))
-                        .bold()
-
-                    TextField("", text: $portText)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 70)
-                        .multilineTextAlignment(.center)
-                        .onChange(of: portText) { newValue in
-                            portText = String(newValue.filter { $0.isNumber }.prefix(5))
+            Form {
+                Section(L("network.section")) {
+                    LabeledContent(L("network.port")) {
+                        HStack(spacing: 6) {
+                            TextField("4871", text: $portText)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: UIConstants.numberFieldWidth)
+                                .onChange(of: portText) { newValue in
+                                    portText = String(newValue.filter { $0.isNumber }.prefix(5))
+                                }
+                                .onSubmit { savePort() }
+                            Button(L("common.save")) {
+                                savePort()
+                            }
                         }
-                        .onSubmit { savePort() }
+                    }
 
-                    Text("Default: 4871")
+                    HStack(spacing: 8) {
+                        StatusDot(color: color(for: model.portStatus))
+                        Text(model.portStatus.description)
+
+                        Spacer()
+
+                        Button(L("network.check")) {
+                            model.checkPort()
+                        }
+                    }
+
+                }
+
+                Section {
+                    Text(L("network.restart_required"))
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
-
-                    Spacer(minLength: 8)
-
-                    Button(L("common.save")) {
-                        savePort()
-                    }
                 }
-
-                Divider()
-
-                HStack(spacing: 8) {
-                    StatusDot(color: color(for: model.portStatus))
-                    Text(model.portStatus.description)
-                        .frame(minWidth: 200, alignment: .leading)
-                    Spacer()
-                    Button(L("network.check")) {
-                        showPortCheckConsent = true
-                    }
-                }
-
-                Text(L("network.restart_required"))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
+            .formStyle(.grouped)
         }
-        .alert(L("network.check.consent.title"), isPresented: $showPortCheckConsent) {
-            Button(L("network.check")) { model.checkPort() }
-            Button(L("common.cancel"), role: .cancel) {}
+        .alert(L("network.check.consent.title"), isPresented: $model.showPortCheckConsentAlert) {
+            Button(L("network.check")) { model.confirmPortCheckConsent() }
+            Button(L("common.cancel"), role: .cancel) { }
         } message: {
             Text(L("network.check.consent.message"))
         }
@@ -475,7 +481,7 @@ struct NetworkTabView: View {
 
     private func color(for status: PortStatus) -> Color {
         switch status {
-        case .idle, .unknown:
+        case .idle, .unknown, .checking:
             return .gray
         case .open:
             return .green
@@ -520,10 +526,9 @@ struct FilesTabView: View {
                     }
 
                     if model.installMode == .launchDaemon && model.filesDirectoryIsOnExternalVolume {
-                        ExternalVolumeWarningView(hasFDA: model.wired3HasFullDiskAccess) {
-                            model.openFullDiskAccessSettings()
-                        }
+                        ExternalVolumeWarningView(hasFDA: model.wired3HasFullDiskAccess)
                     }
+
                     if model.installMode == .launchDaemon && model.filesDirectory.hasPrefix("/Users/") {
                         Label(L("files.daemon_userpath_warning"), systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
@@ -588,10 +593,15 @@ struct DatabaseTabView: View {
 
                     HStack {
                         Spacer(minLength: 0)
-                        Button(L("database.snapshot.trigger_now")) {
-                            model.triggerSnapshotNow()
+                        if model.snapshotConfirmed {
+                            Text(L("status.snapshot_triggered"))
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                         }
-                        .disabled(!model.hasPIDFile)
+                        Button(L("database.snapshot.trigger_now")) {
+                            model.triggerManualSnapshot()
+                        }
+                        .disabled(!model.isServerActive)
                     }
                 }
 
@@ -704,28 +714,7 @@ struct SecurityTabView: View {
     var body: some View {
         SettingsScrollPane {
             Form {
-                if BiometricCredentialStore.isAvailable {
-                    Section(L("touchid.section")) {
-                        HStack {
-                            StatusDot(color: model.hasTouchIDCredential ? .green : .gray)
-                            Text(model.hasTouchIDCredential
-                                 ? L("touchid.status.enabled")
-                                 : L("touchid.status.disabled"))
-                            Spacer()
-                            if model.hasTouchIDCredential {
-                                Button(L("touchid.forget")) {
-                                    model.forgetTouchIDCredential()
-                                }
-                                .foregroundStyle(.red)
-                            }
-                        }
-                        Text(L("touchid.description"))
-                            .foregroundStyle(.secondary)
-                            .font(.footnote)
-                    }
-                }
-
-                Section(L("advanced.admin.section")) {
+Section(L("advanced.admin.section")) {
                     HStack {
                         StatusDot(color: model.hasAdminPassword ? .green : .red)
                         Text(model.adminStatus)

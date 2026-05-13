@@ -223,13 +223,9 @@ public class IndexController: TableController {
             // If cancelled, forceReindex() has already queued a fresh rebuild via
             // indexQueue.async; letting pendingRebuild fire here too would cause a
             // redundant extra traversal immediately after the forced one.
-            //
-            // IMPORTANT: use indexQueue.async, not a direct recursive call.
-            // A synchronous call here overflows the stack when finalisation keeps
-            // failing (pendingRebuild stays true → 400+ frames → SIGBUS).
             if !wasCancelled && pendingRebuild {
                 pendingRebuild = false
-                indexQueue.async { [weak self] in self?.performFullRebuild() }
+                performFullRebuild()
             }
         }
 

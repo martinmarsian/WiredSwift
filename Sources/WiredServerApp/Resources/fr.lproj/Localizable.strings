@@ -12,9 +12,9 @@
 "alert.initial_password.message" = "Le serveur a été initialisé avec un mot de passe admin aléatoire. Notez-le maintenant, il ne sera plus affiché.";
 "alert.initial_password.copy" = "Copier";
 "common.ok" = "OK";
+"common.cancel" = "Annuler";
 "common.choose" = "Choisir";
 "common.select" = "Sélectionner";
-"common.cancel" = "Annuler";
 "common.save" = "Enregistrer";
 
 "pane.general" = "Général";
@@ -38,34 +38,64 @@
 "general.execution.section" = "Exécution";
 "general.execution.running" = "Serveur actif";
 "general.execution.stopped" = "Serveur arrêté";
-"general.execution.running_daemon" = "En cours (daemon)";
-"general.execution.stopped_daemon" = "Arrêté (daemon)";
 "general.execution.start" = "Démarrer";
 "general.execution.stop" = "Arrêter";
-"general.execution.start_on_login" = "Démarrer automatiquement à l'ouverture de session";
+"general.execution.start_on_login" = "Démarrer automatiquement à la connexion macOS";
+"general.execution.running_daemon" = "En cours (daemon)";
+"general.execution.stopped_daemon" = "Arrêté (daemon)";
 "general.execution.start_at_boot" = "Démarrer au démarrage";
+"general.execution.see_advanced" = "Contrôle dans l'onglet Avancé";
 
-"general.system_data_dir.section" = "Répertoire système des données";
-"general.system_data_dir.migrate_description" = "Migrer les données du serveur vers /Library/Wired3/ pour activer le mode LaunchDaemon. Les données d'origine seront conservées en sauvegarde.";
+"general.versions.section" = "Versions";
+
+"general.system_data_dir.section" = "Répertoire de données système";
+"general.system_data_dir.migrate_description" = "Migrer les données du serveur vers /Library/Wired3/ pour activer le mode LaunchDaemon. Les données originales seront conservées comme sauvegarde.";
 "general.system_data_dir.migrate_button" = "Migrer vers /Library/Wired3/";
 
 "general.install_mode.section" = "Mode d'installation";
-"general.install_mode.migrate_warning" = "Migrer d'abord vers /Library/Wired3/ pour activer le mode LaunchDaemon.";
 "general.install_mode.mode" = "Mode";
 "general.install_mode.launch_agent" = "LaunchAgent (utilisateur courant)";
 "general.install_mode.launch_daemon" = "LaunchDaemon (service système)";
 "general.install_mode.daemon_user" = "Utilisateur daemon";
 "general.install_mode.group" = "Groupe";
+"general.install_mode.daemon_running_hint" = "Arrêtez le daemon pour changer l'utilisateur et le groupe.";
 
-"general.versions.section" = "Versions";
+"pane.advanced" = "Avancé";
 
-"fda.check.passed" = "Vérification d'accès daemon réussie.";
+"advanced.daemon.section" = "Mode LaunchDaemon";
+"advanced.daemon.enable" = "Activer le mode LaunchDaemon";
+"advanced.daemon.enable.help" = "Exécute le serveur comme service système démarrant au démarrage, indépendamment de toute connexion utilisateur. Nécessite une migration vers /Library/Wired3/. Option avancée — le mode LaunchAgent standard est recommandé pour la plupart des utilisateurs.";
+"advanced.daemon.requires_migration" = "Migrer vers /Library/Wired3/ d'abord pour activer le mode LaunchDaemon.";
+"advanced.daemon.userpath_warning" = "Le répertoire de fichiers est sous /Users/ et peut ne pas être accessible au LaunchDaemon. Le daemon démarre au démarrage avant la connexion — les répertoires personnels peuvent ne pas être montés ou déchiffrés. Utilisez un chemin sous /Library/ ou /var/ à la place.";
+
+"fda.check.passed" = "Accès complet au disque accordé.";
 "fda.external_volume" = "Le répertoire de fichiers est sur un volume externe.";
-"fda.check.passed.detail" = "L'utilisateur daemon semble avoir accès en lecture. Après une mise à jour binaire, la re-signature peut révoquer cet accès — vérifiez le journal serveur pour \"0 files, 0 dirs\".";
-"fda.check.failed.detail" = "Assurez-vous que le répertoire de fichiers est lisible par l'utilisateur daemon, puis cliquez sur Revérifier.";
-"fda.open_settings" = "Ouvrir Accès disque complet…";
+"fda.check.passed.detail" = "Wired Server a l'Accès complet au disque et peut lire le répertoire de fichiers.";
+"fda.check.failed.detail" = "Wired Server a besoin de l'Accès complet au disque pour lire le répertoire de fichiers sur ce volume. Cliquez sur \"Accès complet au disque…\", activez Wired Server, puis cliquez sur Revérifier.";
+"fda.open_settings" = "Accès complet au disque…";
 "fda.recheck" = "Revérifier";
 "fda.restart_daemon" = "Redémarrer le daemon";
+
+"alert.helper_setup.title" = "Configuration unique requise";
+"alert.helper_setup.message" = "Wired Server nécessite une approbation unique. Cliquez sur Autoriser dans la notification système, puis sur Réessayer. Si la notification a disparu, activez-le manuellement dans \"Éléments de connexion\".";
+"alert.helper_setup.open" = "Éléments de connexion…";
+"alert.helper_setup.retry" = "Réessayer";
+
+"status.daemon.preparing" = "Préparation…";
+"status.daemon.stopping" = "Arrêt du serveur…";
+"status.daemon.activating" = "Activation du LaunchDaemon…";
+"status.daemon.deactivating" = "Désactivation du LaunchDaemon…";
+"status.daemon.done" = "Terminé.";
+"status.migration.awaiting_helper" = "Approbation du helper requise — approuver dans Réglages Système, puis réessayer.";
+
+"error.daemon_conflict" = "Un autre processus wired3 est encore en cours. Arrêtez-le avant d'activer le daemon.";
+"error.mode_switch_failed" = "Échec du changement de mode";
+"error.start_daemon_failed" = "Échec du démarrage du daemon";
+"error.stop_daemon_failed" = "Échec de l'arrêt du daemon";
+"error.daemon_update_failed" = "Échec de la mise à jour du daemon";
+"error.helper.connection_failed" = "Échec de la connexion au helper privilégié";
+"error.helper.operation_failed" = "Opération échouée";
+"error.helper.install_failed_prefix" = "Échec de l'installation du helper";
 
 "network.section" = "Réseau";
 "network.port" = "Port en écoute";
@@ -75,6 +105,7 @@
 "network.restart_required" = "Le serveur doit être redémarré après un changement de port.";
 "network.port_status.idle" = "Non vérifié";
 "network.port_status.unknown" = "Vérification de la disponibilité externe…";
+"network.port_status.checking" = "Vérification de la disponibilité externe…";
 "network.port_status.open" = "Accessible depuis internet";
 "network.port_status.closed" = "Non accessible depuis internet";
 "network.port_status.error" = "Vérification échouée (pas d'internet ?)";
@@ -253,24 +284,3 @@
 "error.migration_server_running" = "Arrêtez le serveur avant de lancer la migration.";
 "error.migration_failed" = "Échec de la migration";
 "error.migration_timed_out" = "La migration a expiré après 5 minutes et a été arrêtée.";
-
-"pane.advanced" = "Avancé";
-
-"advanced.daemon.section" = "Mode LaunchDaemon";
-"advanced.daemon.enable" = "Activer le mode LaunchDaemon";
-"advanced.daemon.enable.help" = "Lance le serveur comme service système au démarrage, indépendamment des sessions utilisateur. Nécessite une migration vers /Library/Wired3/. Il s'agit d'une option avancée — le mode LaunchAgent standard est recommandé pour la plupart des utilisateurs.";
-"advanced.daemon.requires_migration" = "Migrez d'abord vers /Library/Wired3/ pour activer le mode LaunchDaemon.";
-
-"general.execution.see_advanced" = "Contrôle dans l'onglet Avancé";
-
-"status.daemon.preparing" = "Préparation…";
-"status.daemon.stopping" = "Arrêt du serveur…";
-"status.daemon.activating" = "Activation du LaunchDaemon…";
-"status.daemon.deactivating" = "Désactivation du LaunchDaemon…";
-"status.daemon.done" = "Terminé.";
-
-"error.daemon_conflict" = "Un autre processus wired3 est toujours en cours d'exécution. Arrêtez-le avant d'activer le démon.";
-"error.mode_switch_failed" = "Échec du changement de mode";
-"error.start_daemon_failed" = "Impossible de démarrer le démon";
-"error.stop_daemon_failed" = "Impossible d'arrêter le démon";
-"error.daemon_update_failed" = "Impossible de mettre à jour le démon";

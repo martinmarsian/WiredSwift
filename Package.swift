@@ -3,6 +3,8 @@
 
 import PackageDescription
 
+let packageDir = URL(fileURLWithPath: #file).deletingLastPathComponent().path
+
 var dependencies: [Package.Dependency] = []
 var products: [Product] = []
 var targetDependencies: [Target.Dependency] = []
@@ -106,6 +108,25 @@ targets.append(
         ]
     )
 )
+// Privileged XPC helper installed via SMAppService.daemon.
+// The helper's launchd plist is embedded in the __TEXT __info_plist Mach-O section so that
+// launchd can read the MachServices and SMAuthorizedClients keys without a separate file.
+// After building, copy the WiredServerHelper binary into the app bundle under
+// Contents/Library/LaunchServices/ so that SMAppService can find and install it.
+targets.append(
+    .executableTarget(
+        name: "WiredServerHelper",
+        path: "Sources/WiredServerHelper",
+        linkerSettings: [
+            .unsafeFlags([
+                "-Xlinker", "-sectcreate",
+                "-Xlinker", "__TEXT",
+                "-Xlinker", "__info_plist",
+                "-Xlinker", "\(packageDir)/Sources/WiredServerHelper/Info.plist"
+            ])
+        ]
+    )
+)
 #endif
 products.append(
     .library(
@@ -127,6 +148,11 @@ products.append(
     .executable(
         name: "WiredServerApp",
         targets: ["WiredServerApp"])
+)
+products.append(
+    .executable(
+        name: "WiredServerHelper",
+        targets: ["WiredServerHelper"])
 )
 #endif
 #if os(Linux)

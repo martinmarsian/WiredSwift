@@ -147,9 +147,10 @@ extension ServerController {
             return
         }
 
-        // Verify the recipient account exists
+        // Verify the recipient account exists. Reply with permission_denied (not
+        // user_not_found) to avoid leaking which logins are registered on the server.
         guard App.usersController.userExists(withUsername: recipientLogin) else {
-            App.serverController.replyError(client: client, error: "wired.error.user_not_found", message: message)
+            App.serverController.replyError(client: client, error: "wired.error.permission_denied", message: message)
             return
         }
 
@@ -300,10 +301,8 @@ extension ServerController {
         let entries: [(login: String, nick: String)]
         do {
             entries = try App.databaseController.dbQueue.read { db in
-                // Returns login + last_nick for users active within the last 30 days.
-                // wired.message.offline.recipient_login is used (not wired.user.login) to avoid
-                // exposing the auth credential field to non-admin clients. Only users who have a last_nick set are included
-                // (connected at least once since v15); account full_name is never sent.
+                // Only include users who have a last_nick set (i.e. connected at least once
+                // since v15). This avoids exposing login names or account full names.
                 let rows = try Row.fetchAll(db, sql: """
                     SELECT username, last_nick FROM users
                     WHERE username IS NOT NULL AND username != ''

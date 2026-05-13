@@ -42,6 +42,23 @@ struct ContentView: View {
         } message: {
             Text(model.lastErrorMessage)
         }
+        .alert(L("alert.helper_setup.title"), isPresented: $model.showHelperSetupAlert) {
+            if model.pendingHelperRetryAction != nil {
+                Button(L("alert.helper_setup.retry")) {
+                    let action = model.pendingHelperRetryAction
+                    model.pendingHelperRetryAction = nil
+                    action?()
+                }
+            }
+            Button(L("alert.helper_setup.open")) {
+                model.openLoginItemsSettings()
+            }
+            Button(L("common.cancel"), role: .cancel) {
+                model.pendingHelperRetryAction = nil
+            }
+        } message: {
+            Text(L("alert.helper_setup.message"))
+        }
         .alert(L("alert.binary_updated.title"), isPresented: $model.showRestartAfterUpdateAlert) {
             Button(L("alert.binary_updated.restart")) {
                 Task { await model.restartServer() }

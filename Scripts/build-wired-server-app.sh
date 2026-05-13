@@ -3,19 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_CONFIG="${1:-release}"
-
-# Command Line Tools lack x86_64 Swift compatibility libs; prefer full Xcode.
-if [[ -z "${DEVELOPER_DIR:-}" ]]; then
-  for _xcode in /Applications/Xcode.app /Applications/Xcode-beta.app; do
-    if [[ -d "$_xcode/Contents/Developer" ]]; then
-      export DEVELOPER_DIR="$_xcode/Contents/Developer"
-      break
-    fi
-  done
-fi
 APP_NAME="Wired Server"
 EXECUTABLE_NAME="WiredServerApp"
 SERVER_BINARY_NAME="wired3"
+HELPER_EXECUTABLE_NAME="WiredServerHelper"
+HELPER_BUNDLE_ID="fr.read-write.WiredServer3.Helper"
 BUNDLE_ID="fr.read-write.WiredServer3"
 MARKETING_VERSION="${WIRED_MARKETING_VERSION:-3.0}"
 BUILD_NUMBER="${WIRED_BUILD_NUMBER:-1}"
@@ -94,10 +86,12 @@ build_for_arch() {
 
   swift build -c "$BUILD_CONFIG" --arch "$arch" --scratch-path "$scratch_path" --product "$EXECUTABLE_NAME"
   swift build -c "$BUILD_CONFIG" --arch "$arch" --scratch-path "$scratch_path" --product "$SERVER_BINARY_NAME"
+  swift build -c "$BUILD_CONFIG" --arch "$arch" --scratch-path "$scratch_path" --product "$HELPER_EXECUTABLE_NAME"
 }
 
 declare -a EXEC_SLICES=()
 declare -a SERVER_SLICES=()
+declare -a HELPER_SLICES=()
 
 for arch in "${TARGET_ARCHS[@]}"; do
   echo "==> Building $EXECUTABLE_NAME ($BUILD_CONFIG, $arch)"
@@ -117,6 +111,7 @@ for arch in "${TARGET_ARCHS[@]}"; do
   ARCH_BIN_DIR="$ROOT_DIR/.build/$BUILD_CONFIG-$arch/$BUILD_CONFIG"
   ARCH_EXECUTABLE="$ARCH_BIN_DIR/$EXECUTABLE_NAME"
   ARCH_SERVER_BINARY="$ARCH_BIN_DIR/$SERVER_BINARY_NAME"
+  ARCH_HELPER_BINARY="$ARCH_BIN_DIR/$HELPER_EXECUTABLE_NAME"
 
   if [[ ! -x "$ARCH_EXECUTABLE" ]]; then
     echo "Binary not found: $ARCH_EXECUTABLE"
@@ -126,18 +121,25 @@ for arch in "${TARGET_ARCHS[@]}"; do
     echo "Binary not found: $ARCH_SERVER_BINARY"
     exit 1
   fi
+  if [[ ! -x "$ARCH_HELPER_BINARY" ]]; then
+    echo "Binary not found: $ARCH_HELPER_BINARY"
+    exit 1
+  fi
 
   EXEC_SLICES+=("$ARCH_EXECUTABLE")
   SERVER_SLICES+=("$ARCH_SERVER_BINARY")
+  HELPER_SLICES+=("$ARCH_HELPER_BINARY")
 done
 
 BINARY_PATH="$UNIVERSAL_BIN_DIR/$EXECUTABLE_NAME"
 SERVER_BINARY_PATH="$UNIVERSAL_BIN_DIR/$SERVER_BINARY_NAME"
+HELPER_BINARY_PATH="$UNIVERSAL_BIN_DIR/$HELPER_EXECUTABLE_NAME"
 
 echo "==> Creating universal binaries (arm64 + x86_64)"
 lipo -create "${EXEC_SLICES[@]}" -output "$BINARY_PATH"
 lipo -create "${SERVER_SLICES[@]}" -output "$SERVER_BINARY_PATH"
-chmod 755 "$BINARY_PATH" "$SERVER_BINARY_PATH"
+lipo -create "${HELPER_SLICES[@]}" -output "$HELPER_BINARY_PATH"
+chmod 755 "$BINARY_PATH" "$SERVER_BINARY_PATH" "$HELPER_BINARY_PATH"
 
 SERVER_BINARY_SHA256="$(/usr/bin/shasum -a 256 "$SERVER_BINARY_PATH" | awk '{print $1}')"
 if [[ -z "$SERVER_BINARY_SHA256" ]]; then
@@ -167,6 +169,27 @@ chmod 755 "$RESOURCES_DIR/$SERVER_BINARY_NAME"
 cp "$ROOT_DIR/Sources/WiredSwift/Resources/wired.xml" "$RESOURCES_DIR/wired.xml"
 cp "$ROOT_DIR/Sources/wired3/banner.png" "$RESOURCES_DIR/banner.png"
 
+# Place WiredServerHelper in Contents/Library/LaunchServices/ (required by SMAppService).
+# The binary is renamed to the helper's bundle ID so launchd can identify it.
+LAUNCH_SERVICES_DIR="$CONTENTS_DIR/Library/LaunchServices"
+LAUNCH_DAEMONS_BUNDLE_DIR="$CONTENTS_DIR/Library/LaunchDaemons"
+mkdir -p "$LAUNCH_SERVICES_DIR" "$LAUNCH_DAEMONS_BUNDLE_DIR"
+
+cp "$HELPER_BINARY_PATH" "$LAUNCH_SERVICES_DIR/$HELPER_BUNDLE_ID"
+chmod 755 "$LAUNCH_SERVICES_DIR/$HELPER_BUNDLE_ID"
+
+cp "$ROOT_DIR/Sources/WiredServerHelper/SMAppService.plist" \
+   "$LAUNCH_DAEMONS_BUNDLE_DIR/$HELPER_BUNDLE_ID.plist"
+
+# Expand $(AppBundlePath) to an absolute path before signing.
+# macOS 26 does not expand this variable at SMAppService registration time,
+# causing launchd to reject the plist with "Invalid or missing Program".
+# APP_INSTALL_PATH can be overridden for release builds (default: dist location).
+APP_INSTALL_PATH="${APP_INSTALL_PATH:-$APP_DIR}"
+/usr/libexec/PlistBuddy \
+    -c "Set :Program $APP_INSTALL_PATH/Contents/Library/LaunchServices/$HELPER_BUNDLE_ID" \
+    "$LAUNCH_DAEMONS_BUNDLE_DIR/$HELPER_BUNDLE_ID.plist"
+
 echo "==> Copying SwiftPM resource bundles"
 BUNDLE_SOURCE_DIR="$ROOT_DIR/.build/$BUILD_CONFIG-${TARGET_ARCHS[0]}/$BUILD_CONFIG"
 shopt -s nullglob
@@ -185,6 +208,7 @@ cat > "$INFO_PLIST" <<PLIST
   <key>CFBundleLocalizations</key>
   <array>
     <string>en</string>
+    <string>de</string>
     <string>fr</string>
   </array>
   <key>CFBundleExecutable</key>
@@ -243,28 +267,108 @@ resolve_signing_identity() {
 sign_file() {
   local identity="$1"
   local file="$2"
-  codesign --force --timestamp --options runtime --sign "$identity" "$file"
+  local entitlements="${3:-}"
+  if [[ -n "$entitlements" && -f "$entitlements" ]]; then
+    codesign --force --timestamp --options runtime --sign "$identity" --entitlements "$entitlements" "$file"
+  else
+    codesign --force --timestamp --options runtime --sign "$identity" "$file"
+  fi
 }
 
 sign_app_bundle() {
   local identity="$1"
   local app="$2"
-  codesign --force --deep --timestamp --options runtime --sign "$identity" "$app"
+  local entitlements="${3:-}"
+  if [[ -n "$entitlements" && -f "$entitlements" ]]; then
+    codesign --force --deep --timestamp --options runtime --sign "$identity" --entitlements "$entitlements" "$app"
+  else
+    codesign --force --deep --timestamp --options runtime --sign "$identity" "$app"
+  fi
+}
+
+extract_notary_submission_id() {
+  sed -nE 's/^[[:space:]]*id:[[:space:]]*([0-9a-fA-F-]{36})[[:space:]]*$/\1/p' | tail -n 1
+}
+
+is_transient_notary_error() {
+  local output="${1:-}"
+  [[ "$output" == *"HTTPClientError.connectTimeout"* ]] ||
+    [[ "$output" == *"timed out"* ]] ||
+    [[ "$output" == *"timeout"* ]] ||
+    [[ "$output" == *"connection reset"* ]] ||
+    [[ "$output" == *"connection refused"* ]] ||
+    [[ "$output" == *"network connection was lost"* ]] ||
+    [[ "$output" == *"HTTP status code: 500"* ]] ||
+    [[ "$output" == *"HTTP status code: 502"* ]] ||
+    [[ "$output" == *"HTTP status code: 503"* ]] ||
+    [[ "$output" == *"HTTP status code: 504"* ]]
+}
+
+wait_for_notary_submission() {
+  local profile="$1"
+  local submission_id="$2"
+  local max_attempts="${NOTARY_WAIT_RETRY_ATTEMPTS:-4}"
+  local sleep_seconds="${NOTARY_WAIT_RETRY_DELAY_SECONDS:-30}"
+  local attempt=1
+  local output=""
+  local status=0
+
+  while true; do
+    echo "==> Waiting for notarization submission $submission_id"
+    if output="$(xcrun notarytool wait "$submission_id" --keychain-profile "$profile" --timeout "${NOTARY_WAIT_TIMEOUT:-30m}" 2>&1)"; then
+      printf '%s\n' "$output"
+      return 0
+    fi
+    status=$?
+    printf '%s\n' "$output" >&2
+
+    if (( attempt >= max_attempts )) || ! is_transient_notary_error "$output"; then
+      return "$status"
+    fi
+
+    echo "==> Notary wait failed with a transient network error (attempt ${attempt}/${max_attempts}); retrying in ${sleep_seconds}s"
+    sleep "$sleep_seconds"
+    attempt=$((attempt + 1))
+    sleep_seconds=$((sleep_seconds * 2))
+  done
 }
 
 notarize_zip() {
   local profile="$1"
   local zip_path="$2"
   local label="$3"
+  local max_attempts="${NOTARY_SUBMIT_RETRY_ATTEMPTS:-3}"
+  local sleep_seconds="${NOTARY_SUBMIT_RETRY_DELAY_SECONDS:-30}"
+  local attempt=1
+  local output=""
+  local status=0
+  local submission_id=""
 
   echo "==> Notarizing $label"
-  local output
-  output="$(xcrun notarytool submit "$zip_path" --keychain-profile "$profile" --wait 2>&1)"
-  echo "$output"
-  if ! echo "$output" | grep -q "status: Accepted"; then
-    echo "Notarization was not accepted for $label — aborting." >&2
-    exit 1
-  fi
+  while true; do
+    if output="$(xcrun notarytool submit "$zip_path" --keychain-profile "$profile" --wait --timeout "${NOTARY_WAIT_TIMEOUT:-30m}" 2>&1)"; then
+      printf '%s\n' "$output"
+      return 0
+    fi
+    status=$?
+    printf '%s\n' "$output" >&2
+
+    submission_id="$(printf '%s\n' "$output" | extract_notary_submission_id)"
+    if [[ -n "$submission_id" ]]; then
+      echo "==> Notary submission was created before the error: $submission_id"
+      wait_for_notary_submission "$profile" "$submission_id"
+      return $?
+    fi
+
+    if (( attempt >= max_attempts )) || ! is_transient_notary_error "$output"; then
+      return "$status"
+    fi
+
+    echo "==> Notary submit failed with a transient network error (attempt ${attempt}/${max_attempts}); retrying in ${sleep_seconds}s"
+    sleep "$sleep_seconds"
+    attempt=$((attempt + 1))
+    sleep_seconds=$((sleep_seconds * 2))
+  done
 }
 
 SIGNING_IDENTITY="$(resolve_signing_identity || true)"
@@ -276,11 +380,16 @@ if [[ -n "$SIGNING_IDENTITY" ]]; then
   fi
   echo "==> Using signing identity: $SIGNING_IDENTITY"
 
+  APP_ENTITLEMENTS="$ROOT_DIR/Sources/WiredServerApp/WiredServerApp.entitlements"
+  HELPER_ENTITLEMENTS="$ROOT_DIR/Sources/WiredServerHelper/WiredServerHelper.entitlements"
+  # Sign helper first (before the deep app bundle sign).
+  sign_file "$SIGNING_IDENTITY" "$LAUNCH_SERVICES_DIR/$HELPER_BUNDLE_ID" "$HELPER_ENTITLEMENTS"
   sign_file "$SIGNING_IDENTITY" "$DIST_SERVER_BINARY"
   sign_file "$SIGNING_IDENTITY" "$RESOURCES_DIR/$SERVER_BINARY_NAME"
-  sign_app_bundle "$SIGNING_IDENTITY" "$APP_DIR"
+  sign_app_bundle "$SIGNING_IDENTITY" "$APP_DIR" "$APP_ENTITLEMENTS"
 else
   echo "==> No Developer ID identity found, using ad-hoc signing"
+  codesign --force --sign - "$LAUNCH_SERVICES_DIR/$HELPER_BUNDLE_ID"
   codesign --force --sign - "$DIST_SERVER_BINARY"
   codesign --force --sign - "$RESOURCES_DIR/$SERVER_BINARY_NAME"
   codesign --force --deep --sign - "$APP_DIR"
@@ -336,13 +445,6 @@ if [[ "$NOTARIZE" == "1" ]]; then
   xcrun stapler validate "$APP_DIR"
   rm -f "$APP_ZIP_PATH"
   ditto -c -k --keepParent "$APP_DIR" "$APP_ZIP_PATH"
-
-  # Flat executables cannot have notarization tickets stapled (xcrun stapler
-  # only supports .app/.dmg/.pkg). The ticket is registered in Apple's CDN;
-  # Gatekeeper verifies it online at first launch when the quarantine flag is
-  # present. The app install flow re-signs wired3 with ad-hoc after copying
-  # it to /Library/Wired3/bin/, which removes the Hardened Runtime flag and
-  # makes it launchable by the LaunchDaemon without a stapled ticket.
 fi
 
 echo "==> Verifying signatures"

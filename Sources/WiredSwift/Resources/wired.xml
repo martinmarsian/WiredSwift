@@ -980,12 +980,6 @@
                 logged in.
             </p7:documentation>
         </p7:field>
-        <p7:field name="wired.account.user.list_offline_users" type="bool" id="8101" version="3.0">
-            <p7:documentation>
-                Indicates whether the account gives the privilege to receive the list of offline
-                registered users after login, enabling offline private messaging.
-            </p7:documentation>
-        </p7:field>
         <p7:field name="wired.account.chat.kick_users" type="bool" id="8024" version="2.0">
             <p7:documentation>
                 Indicates whether the account gives the privilege to kick other users.
@@ -1019,6 +1013,13 @@
         <p7:field name="wired.account.message.send_offline_messages" type="bool" id="8087" version="3.0">
             <p7:documentation>
                 Indicates whether the account gives the privilege of sending offline private messages.
+            </p7:documentation>
+        </p7:field>
+        <p7:field name="wired.account.user.list_offline_users" type="bool" id="8088" version="3.0">
+            <p7:documentation>
+                Indicates whether the account gives the privilege of receiving the offline user list
+                ([message:wired.user.offline_list] entries) after login. Required to enumerate
+                registered users currently disconnected and to address them via offline messaging.
             </p7:documentation>
         </p7:field>
         <p7:field name="wired.account.message.broadcast" type="bool" id="8028" version="2.0">
@@ -1659,7 +1660,6 @@
             <p7:member field="wired.account.user.ban_users" />
             <p7:member field="wired.account.user.cannot_be_disconnected" />
             <p7:member field="wired.account.user.get_users" />
-            <p7:member field="wired.account.user.list_offline_users" />
             <p7:member field="wired.account.chat.kick_users" />
             <p7:member field="wired.account.chat.set_topic" />
             <p7:member field="wired.account.chat.create_chats" />
@@ -1668,6 +1668,7 @@
             <p7:member field="wired.account.chat.add_reactions" />
             <p7:member field="wired.account.message.send_messages" />
             <p7:member field="wired.account.message.send_offline_messages" />
+            <p7:member field="wired.account.user.list_offline_users" />
             <p7:member field="wired.account.message.broadcast" />
             <p7:member field="wired.account.board.read_boards" />
             <p7:member field="wired.account.board.search_boards" />
@@ -1936,6 +1937,7 @@
             <p7:documentation>
                 One entry in the offline user list sent by the server after login.
                 Each message represents a registered account that is not currently connected.
+                Sent only to clients whose account has [field:wired.account.user.list_offline_users].
             </p7:documentation>
             <p7:parameter field="wired.message.offline.recipient_login" use="required" version="3.0" />
             <p7:parameter field="wired.user.nick" version="3.0" />

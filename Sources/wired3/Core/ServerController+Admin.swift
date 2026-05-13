@@ -627,7 +627,6 @@ extension ServerController {
 
         App.serverController.replyOK(client: client, message: message)
         self.broadcastAccountsChangedToSubscribers()
-        self.broadcastNewOfflineUser(username: name)
         self.recordEvent(.accountCreatedUser, client: client, parameters: [name])
     }
 
@@ -1230,11 +1229,6 @@ extension ServerController {
         return (hash: hash, salt: salt)
     }
 
-    private func broadcastNewOfflineUser(username: String) {
-        // New accounts have no last_nick yet — don't expose login or full_name.
-        // The account will appear automatically after their first login.
-    }
-
     private func broadcastAccountsChangedToSubscribers() {
         let broadcast = P7Message(withName: "wired.account.accounts_changed", spec: self.spec)
 
@@ -1264,6 +1258,7 @@ extension ServerController {
 
             guard let refreshedUser = userWithPrivileges(matchingUsername: currentName) else { continue }
 
+            let hadOfflineList = connectedClient.user?.hasPrivilege(name: "wired.account.user.list_offline_users") ?? false
             connectedClient.user = refreshedUser
 
             if !refreshedUser.hasPrivilege(name: "wired.account.account.list_accounts") {
@@ -1279,6 +1274,13 @@ extension ServerController {
             }
 
             _ = self.send(message: self.accountPrivilegesMessage(for: refreshedUser), client: connectedClient)
+
+            // If the offline-list privilege was just granted, push the current
+            // list so the client doesn't have to reconnect to populate the panel.
+            let hasOfflineList = refreshedUser.hasPrivilege(name: "wired.account.user.list_offline_users")
+            if !hadOfflineList && hasOfflineList {
+                self.sendOfflineUserList(to: connectedClient)
+            }
         }
     }
 
@@ -1296,6 +1298,7 @@ extension ServerController {
             guard wasInAffectedGroup else { continue }
 
             guard let refreshedUser = userWithPrivileges(matchingUsername: username) else { continue }
+            let hadOfflineList = currentUser.hasPrivilege(name: "wired.account.user.list_offline_users")
             connectedClient.user = refreshedUser
 
             if !refreshedUser.hasPrivilege(name: "wired.account.account.list_accounts") {
@@ -1311,6 +1314,11 @@ extension ServerController {
             }
 
             _ = self.send(message: self.accountPrivilegesMessage(for: refreshedUser), client: connectedClient)
+
+            let hasOfflineList = refreshedUser.hasPrivilege(name: "wired.account.user.list_offline_users")
+            if !hadOfflineList && hasOfflineList {
+                self.sendOfflineUserList(to: connectedClient)
+            }
         }
     }
 
