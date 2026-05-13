@@ -628,13 +628,23 @@ public class FilesController {
             return
         }
 
+        let finalPath = resolveAliasesAndSymlinks(in: realPath)
+
         // Prevent privilege escalation: block a non-owner from assigning themselves as owner,
         // which would grant new read access to the folder.
-        if let existingPrivileges = FilePrivilege(path: realPath) {
-            if existingPrivileges.owner != user.username && owner == user.username {
+        // finalPath (alias/symlink-resolved) is used so metadata is read from the canonical location.
+        if let existingPrivileges = FilePrivilege(path: finalPath) {
+            if existingPrivileges.owner != user.username,
+               owner == user.username {
                 App.serverController.replyError(client: client, error: "wired.error.permission_denied", message: message)
                 return
             }
+        } else if owner == user.username,
+                  !user.hasPrivilege(name: "wired.account.settings.edit") {
+            // No permissions file yet: only admins may claim initial ownership to prevent
+            // a first-caller-wins escalation on folders that were never explicitly permissioned.
+            App.serverController.replyError(client: client, error: "wired.error.permission_denied", message: message)
+            return
         }
 
         var mode: File.FilePermissions = []
@@ -644,8 +654,6 @@ public class FilesController {
         if groupWrite { mode.insert(.groupWrite) }
         if everyoneRead { mode.insert(.everyoneRead) }
         if everyoneWrite { mode.insert(.everyoneWrite) }
-
-        let finalPath = resolveAliasesAndSymlinks(in: realPath)
 
         let wiredMetaPath = finalPath.stringByAppendingPathComponent(path: ".wired")
         do {
