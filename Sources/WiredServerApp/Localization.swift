@@ -64,15 +64,21 @@ private final class Localizer {
         return [:]
     }
 
+    // Compiled once — pattern is a compile-time constant, no need to recompile per call.
+    private static let stringsPattern: NSRegularExpression = {
+        // swiftlint:disable:next force_try
+        try! NSRegularExpression(
+            pattern: #"^"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)"\s*;"#,
+            options: [.anchorsMatchLines]
+        )
+    }()
+
     // NSDictionary(contentsOf:) cannot parse UTF-8-without-BOM .strings files —
     // it silently returns nil. Read as UTF-8 and parse the "key" = "value"; format.
     private static func parseStringsFile(at url: URL) -> [String: String]? {
         guard let content = try? String(contentsOf: url, encoding: .utf8),
               !content.isEmpty else { return nil }
-        let pattern = try! NSRegularExpression(
-            pattern: #"^"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)"\s*;"#,
-            options: [.anchorsMatchLines]
-        )
+        let pattern = stringsPattern
         var result: [String: String] = [:]
         let nsContent = content as NSString
         let range = NSRange(location: 0, length: nsContent.length)
