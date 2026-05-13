@@ -1,6 +1,7 @@
 // swift-tools-version:5.4
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
+import Foundation
 import PackageDescription
 
 let packageDir = URL(fileURLWithPath: #file).deletingLastPathComponent().path
