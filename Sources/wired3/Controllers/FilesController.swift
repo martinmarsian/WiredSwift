@@ -640,9 +640,9 @@ public class FilesController {
                 return
             }
         } else if owner == user.username,
-                  !user.hasPrivilege(name: "wired.account.settings.edit") {
-            // No permissions file yet: only admins may claim initial ownership to prevent
-            // a first-caller-wins escalation on folders that were never explicitly permissioned.
+                  !user.hasPrivilege(name: "wired.account.account.edit_users") {
+            // No permissions file yet: only admins (edit_users) may claim initial ownership to
+            // prevent a first-caller-wins escalation on folders never explicitly permissioned.
             App.serverController.replyError(client: client, error: "wired.error.permission_denied", message: message)
             return
         }
