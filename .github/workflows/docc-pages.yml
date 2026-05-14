@@ -19,6 +19,7 @@ concurrency:
 jobs:
   build-docs:
     name: Build DocC Site
+    if: github.repository == 'nark/WiredSwift'
     runs-on: macos-14
     timeout-minutes: 20
 
