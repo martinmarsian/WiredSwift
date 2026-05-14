@@ -468,8 +468,7 @@ struct NetworkTabView: View {
         } message: {
             Text(L("network.check.consent.message"))
         }
-        .onAppear { portText = String(model.serverPort) }
-        .onChange(of: model.serverPort) { portText = String($0) }
+        .task(id: model.serverPort) { portText = String(model.serverPort) }
     }
 
     private func savePort() {
