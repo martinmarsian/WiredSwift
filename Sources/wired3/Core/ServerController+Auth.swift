@@ -148,21 +148,30 @@ extension ServerController {
         client.loginTime = Date()
         client.idleTime = client.loginTime
 
+        let isDaemon = client.applicationName == "wiredsyncd"
         try? App.databaseController.dbQueue.write { db in
-            let rawIcon = client.icon
-            let icon: Data? = (rawIcon?.isEmpty == false && (rawIcon?.count ?? 0) <= ServerController.maxOfflineIconBytes) ? rawIcon : nil
-            let rawStatus = client.status ?? ""
-            let status = rawStatus.count <= 512 ? rawStatus : String(rawStatus.prefix(512))
-            if let nick = client.nick, !nick.isEmpty {
+            if isDaemon {
+                // Sync daemon connections must not overwrite the human user's last_nick/icon/status.
                 try db.execute(
-                    sql: "UPDATE users SET last_login_at = ?, last_nick = ?, last_status = ?, last_icon = ? WHERE username = ?",
-                    arguments: [Date().timeIntervalSince1970, nick, status, icon, login]
+                    sql: "UPDATE users SET last_login_at = ? WHERE username = ?",
+                    arguments: [Date().timeIntervalSince1970, login]
                 )
             } else {
-                try db.execute(
-                    sql: "UPDATE users SET last_login_at = ?, last_status = ?, last_icon = ? WHERE username = ?",
-                    arguments: [Date().timeIntervalSince1970, status, icon, login]
-                )
+                let rawIcon = client.icon
+                let icon: Data? = (rawIcon?.isEmpty == false && (rawIcon?.count ?? 0) <= ServerController.maxOfflineIconBytes) ? rawIcon : nil
+                let rawStatus = client.status ?? ""
+                let status = rawStatus.count <= 512 ? rawStatus : String(rawStatus.prefix(512))
+                if let nick = client.nick, !nick.isEmpty {
+                    try db.execute(
+                        sql: "UPDATE users SET last_login_at = ?, last_nick = ?, last_status = ?, last_icon = ? WHERE username = ?",
+                        arguments: [Date().timeIntervalSince1970, nick, status, icon, login]
+                    )
+                } else {
+                    try db.execute(
+                        sql: "UPDATE users SET last_login_at = ?, last_status = ?, last_icon = ? WHERE username = ?",
+                        arguments: [Date().timeIntervalSince1970, status, icon, login]
+                    )
+                }
             }
         }
 

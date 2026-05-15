@@ -518,6 +518,7 @@ public class ServerController: ServerDelegate {
         let leftNick = client.nick
         let leftStatus = client.status
         let leftIcon = client.icon
+        let leftAppName = client.applicationName
 
         let app = App
         app?.filesController?.unsubscribeAll(client: client)
@@ -530,6 +531,7 @@ public class ServerController: ServerDelegate {
         app?.clientsController?.removeClient(client: client)
 
         if let login = leftLogin, !login.isEmpty, login != "guest",
+           leftAppName != "wiredsyncd",
            let nick = leftNick, !nick.isEmpty {
             self.broadcastOfflineUserEntry(login: login, nick: nick, status: leftStatus, icon: leftIcon)
         }
