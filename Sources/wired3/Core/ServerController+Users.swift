@@ -116,8 +116,8 @@ extension ServerController {
     }
 
     // Nick and status are display strings; caps prevent DB bloat and broadcast abuse.
-    private static let maxLastNickChars = 256
-    private static let maxLastStatusChars = 512
+    static let maxLastNickChars = 256
+    static let maxLastStatusChars = 128
 
     func persistLastNick(_ nick: String, forUsername username: String) {
         guard !nick.isEmpty else { return }

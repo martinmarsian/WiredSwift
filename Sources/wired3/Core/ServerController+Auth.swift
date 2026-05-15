@@ -160,7 +160,8 @@ extension ServerController {
                 let rawIcon = client.icon
                 let icon: Data? = (rawIcon?.isEmpty == false && (rawIcon?.count ?? 0) <= ServerController.maxOfflineIconBytes) ? rawIcon : nil
                 let rawStatus = client.status ?? ""
-                let status = rawStatus.count <= 512 ? rawStatus : String(rawStatus.prefix(512))
+                let statusCap = ServerController.maxLastStatusChars
+                let status = rawStatus.count <= statusCap ? rawStatus : String(rawStatus.prefix(statusCap))
                 if let nick = client.nick, !nick.isEmpty {
                     try db.execute(
                         sql: "UPDATE users SET last_login_at = ?, last_nick = ?, last_status = ?, last_icon = ? WHERE username = ?",
