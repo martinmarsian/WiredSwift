@@ -59,6 +59,9 @@ enum WiredMigrations {
         migrator.registerMigration("v17_last_icon_status") { db in
             try WiredMigrations.v17(db)
         }
+        migrator.registerMigration("v18_clear_daemon_identity_pollution") { db in
+            try WiredMigrations.v18(db)
+        }
     }
 
     static func v2(_ db: Database) throws {
@@ -454,6 +457,15 @@ enum WiredMigrations {
             t.add(column: "last_icon", .blob)
             t.add(column: "last_status", .text)
         }
+    }
+
+    // v18: Clear last_nick/icon/status that may have been written by the wiredsyncd daemon
+    // before it was excluded from offline-identity persistence. The data is display-only
+    // and will repopulate correctly on the next real user disconnect.
+    static func v18(_ db: Database) throws {
+        try db.execute(sql: """
+            UPDATE users SET last_nick = NULL, last_status = NULL, last_icon = NULL
+        """)
     }
 
     // v15: Persist the user's last known chat nick so the offline user list can show it.
