@@ -77,7 +77,7 @@ public class ServerController: ServerDelegate {
     // SECURITY (FINDING_C_012): Rate limiting for broadcast messages per user
     static let broadcastRateLimitPerMinute: Int = 5
     // Wired icons are 32×32 px; 64 KB caps DB bloat and broadcast amplification.
-    static let maxOfflineIconBytes: Int = 64 * 1024
+    static let maxOfflineIconBytes: Int = 16 * 1024
     var broadcastTimestamps: [UInt32: [Date]] = [:]
     let broadcastRateLock = NSLock()
 
