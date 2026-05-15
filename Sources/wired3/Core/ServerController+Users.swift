@@ -64,7 +64,9 @@ extension ServerController {
             let newNick = client.nick ?? ""
             if previousNick != newNick {
                 self.recordEvent(.userChangedNick, client: client, parameters: [previousNick, newNick])
-                persistLastNick(newNick, forUsername: username)
+                if client.applicationName != "wiredsyncd" {
+                    persistLastNick(newNick, forUsername: username)
+                }
             }
             self.sendUserStatus(forClient: client)
         }
@@ -155,7 +157,8 @@ extension ServerController {
     func receiveUserSetStatus(_ client: Client, _ message: P7Message) {
         if let status = message.string(forField: "wired.user.status") {
             client.status = status
-            if client.state == .LOGGED_IN, let username = client.user?.username {
+            if client.state == .LOGGED_IN, let username = client.user?.username,
+               client.applicationName != "wiredsyncd" {
                 persistLastStatus(status, forUsername: username)
             }
         }
@@ -172,7 +175,8 @@ extension ServerController {
     func receiveUserSetIcon(_ client: Client, _ message: P7Message) {
         if let icon = message.data(forField: "wired.user.icon") {
             client.icon = icon
-            if client.state == .LOGGED_IN, let username = client.user?.username {
+            if client.state == .LOGGED_IN, let username = client.user?.username,
+               client.applicationName != "wiredsyncd" {
                 persistLastIcon(icon, forUsername: username)
             }
         }
