@@ -298,13 +298,18 @@ extension ServerController {
 
         let onlineLogins = Set(App.clientsController.allConnectedLogins())
 
-        let entries: [(login: String, nick: String)]
+        struct OfflineEntry {
+            let login: String
+            let nick: String
+            let status: String?
+            let icon: Data?
+        }
+
+        let entries: [OfflineEntry]
         do {
             entries = try App.databaseController.dbQueue.read { db in
-                // Only include users who have a last_nick set (i.e. connected at least once
-                // since v15). This avoids exposing login names or account full names.
                 let rows = try Row.fetchAll(db, sql: """
-                    SELECT username, last_nick FROM users
+                    SELECT username, last_nick, last_status, last_icon FROM users
                     WHERE username IS NOT NULL AND username != ''
                       AND last_login_at IS NOT NULL
                       AND last_login_at > unixepoch('now') - 2592000
@@ -312,7 +317,12 @@ extension ServerController {
                     ORDER BY last_nick ASC
                 """)
                 return rows.map { row in
-                    (login: row["username"] as String, nick: row["last_nick"] as String)
+                    OfflineEntry(
+                        login: row["username"] as String,
+                        nick: row["last_nick"] as String,
+                        status: row["last_status"] as? String,
+                        icon: row["last_icon"] as? Data
+                    )
                 }
             }
         } catch {
@@ -324,6 +334,12 @@ extension ServerController {
             let msg = P7Message(withName: "wired.user.offline_list", spec: self.spec)
             msg.addParameter(field: "wired.message.offline.recipient_login", value: entry.login)
             msg.addParameter(field: "wired.user.nick", value: entry.nick)
+            if let status = entry.status {
+                msg.addParameter(field: "wired.user.status", value: status)
+            }
+            if let icon = entry.icon, !icon.isEmpty {
+                msg.addParameter(field: "wired.user.icon", value: icon)
+            }
             _ = self.send(message: msg, client: client)
         }
 

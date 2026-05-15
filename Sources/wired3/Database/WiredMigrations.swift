@@ -56,6 +56,9 @@ enum WiredMigrations {
         migrator.registerMigration("v16_offline_messages_encrypted") { db in
             try WiredMigrations.v16(db)
         }
+        migrator.registerMigration("v17_last_icon_status") { db in
+            try WiredMigrations.v17(db)
+        }
     }
 
     static func v2(_ db: Database) throws {
@@ -442,6 +445,14 @@ enum WiredMigrations {
     static func v16(_ db: Database) throws {
         try db.alter(table: "offline_messages") { t in
             t.add(column: "is_encrypted", .integer).notNull().defaults(to: 0)
+        }
+    }
+
+    // v17: Store the user's last known icon and status for display in the offline user list.
+    static func v17(_ db: Database) throws {
+        try db.alter(table: "users") { t in
+            t.add(column: "last_icon", .blob)
+            t.add(column: "last_status", .text)
         }
     }
 

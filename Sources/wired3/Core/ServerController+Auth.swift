@@ -149,15 +149,19 @@ extension ServerController {
         client.idleTime = client.loginTime
 
         try? App.databaseController.dbQueue.write { db in
+            let rawIcon = client.icon
+            let icon: Data? = (rawIcon?.isEmpty == false && (rawIcon?.count ?? 0) <= ServerController.maxOfflineIconBytes) ? rawIcon : nil
+            let rawStatus = client.status ?? ""
+            let status = rawStatus.count <= 512 ? rawStatus : String(rawStatus.prefix(512))
             if let nick = client.nick, !nick.isEmpty {
                 try db.execute(
-                    sql: "UPDATE users SET last_login_at = ?, last_nick = ? WHERE username = ?",
-                    arguments: [Date().timeIntervalSince1970, nick, login]
+                    sql: "UPDATE users SET last_login_at = ?, last_nick = ?, last_status = ?, last_icon = ? WHERE username = ?",
+                    arguments: [Date().timeIntervalSince1970, nick, status, icon, login]
                 )
             } else {
                 try db.execute(
-                    sql: "UPDATE users SET last_login_at = ? WHERE username = ?",
-                    arguments: [Date().timeIntervalSince1970, login]
+                    sql: "UPDATE users SET last_login_at = ?, last_status = ?, last_icon = ? WHERE username = ?",
+                    arguments: [Date().timeIntervalSince1970, status, icon, login]
                 )
             }
         }

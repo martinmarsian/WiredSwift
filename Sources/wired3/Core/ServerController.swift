@@ -76,6 +76,8 @@ public class ServerController: ServerDelegate {
 
     // SECURITY (FINDING_C_012): Rate limiting for broadcast messages per user
     static let broadcastRateLimitPerMinute: Int = 5
+    // Wired icons are 32×32 px; 64 KB caps DB bloat and broadcast amplification.
+    static let maxOfflineIconBytes: Int = 64 * 1024
     var broadcastTimestamps: [UInt32: [Date]] = [:]
     let broadcastRateLock = NSLock()
 
@@ -514,6 +516,8 @@ public class ServerController: ServerDelegate {
         // privileged peers that this account is now offline.
         let leftLogin = client.user?.username
         let leftNick = client.nick
+        let leftStatus = client.status
+        let leftIcon = client.icon
 
         let app = App
         app?.filesController?.unsubscribeAll(client: client)
@@ -527,7 +531,7 @@ public class ServerController: ServerDelegate {
 
         if let login = leftLogin, !login.isEmpty,
            let nick = leftNick, !nick.isEmpty {
-            self.broadcastOfflineUserEntry(login: login, nick: nick)
+            self.broadcastOfflineUserEntry(login: login, nick: nick, status: leftStatus, icon: leftIcon)
         }
     }
 
@@ -536,7 +540,7 @@ public class ServerController: ServerDelegate {
     /// offline, so their offline-user list can stay current without re-login.
     /// Reuses the existing `wired.user.offline_list` message — clients already
     /// handle it. Skipped if login or nick is empty.
-    private func broadcastOfflineUserEntry(login: String, nick: String) {
+    private func broadcastOfflineUserEntry(login: String, nick: String, status: String?, icon: Data?) {
         guard let clients = App.clientsController?.connectedClientsSnapshot() else { return }
         for peer in clients
         where peer.state == .LOGGED_IN
@@ -544,6 +548,12 @@ public class ServerController: ServerDelegate {
             let entry = P7Message(withName: "wired.user.offline_list", spec: self.spec)
             entry.addParameter(field: "wired.message.offline.recipient_login", value: login)
             entry.addParameter(field: "wired.user.nick", value: nick)
+            if let status {
+                entry.addParameter(field: "wired.user.status", value: status)
+            }
+            if let icon, !icon.isEmpty, icon.count <= ServerController.maxOfflineIconBytes {
+                entry.addParameter(field: "wired.user.icon", value: icon)
+            }
             _ = self.send(message: entry, client: peer)
         }
     }

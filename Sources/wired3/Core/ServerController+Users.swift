@@ -113,12 +113,41 @@ extension ServerController {
         self.reply(client: client, reply: reply, message: message)
     }
 
+    // Nick and status are display strings; caps prevent DB bloat and broadcast abuse.
+    private static let maxLastNickChars = 256
+    private static let maxLastStatusChars = 512
+
     func persistLastNick(_ nick: String, forUsername username: String) {
         guard !nick.isEmpty else { return }
+        let capped = nick.count <= Self.maxLastNickChars
+            ? nick
+            : String(nick.prefix(Self.maxLastNickChars))
         try? App.databaseController.dbQueue.write { db in
             try db.execute(
                 sql: "UPDATE users SET last_nick = ? WHERE username = ?",
-                arguments: [nick, username]
+                arguments: [capped, username]
+            )
+        }
+    }
+
+    func persistLastStatus(_ status: String, forUsername username: String) {
+        let capped = status.count <= Self.maxLastStatusChars
+            ? status
+            : String(status.prefix(Self.maxLastStatusChars))
+        try? App.databaseController.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE users SET last_status = ? WHERE username = ?",
+                arguments: [capped, username]
+            )
+        }
+    }
+
+    func persistLastIcon(_ icon: Data, forUsername username: String) {
+        guard !icon.isEmpty, icon.count <= ServerController.maxOfflineIconBytes else { return }
+        try? App.databaseController.dbQueue.write { db in
+            try db.execute(
+                sql: "UPDATE users SET last_icon = ? WHERE username = ?",
+                arguments: [icon, username]
             )
         }
     }
@@ -126,6 +155,9 @@ extension ServerController {
     func receiveUserSetStatus(_ client: Client, _ message: P7Message) {
         if let status = message.string(forField: "wired.user.status") {
             client.status = status
+            if client.state == .LOGGED_IN, let username = client.user?.username {
+                persistLastStatus(status, forUsername: username)
+            }
         }
 
         let response = P7Message(withName: "wired.okay", spec: self.spec)
@@ -140,6 +172,9 @@ extension ServerController {
     func receiveUserSetIcon(_ client: Client, _ message: P7Message) {
         if let icon = message.data(forField: "wired.user.icon") {
             client.icon = icon
+            if client.state == .LOGGED_IN, let username = client.user?.username {
+                persistLastIcon(icon, forUsername: username)
+            }
         }
 
         let response = P7Message(withName: "wired.okay", spec: self.spec)

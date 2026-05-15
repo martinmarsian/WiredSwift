@@ -1941,6 +1941,8 @@
             </p7:documentation>
             <p7:parameter field="wired.message.offline.recipient_login" use="required" version="3.0" />
             <p7:parameter field="wired.user.nick" version="3.0" />
+            <p7:parameter field="wired.user.status" version="3.2" />
+            <p7:parameter field="wired.user.icon" version="3.2" />
         </p7:message>
 
         <p7:message name="wired.user.offline_list.done" id="3012" version="3.0">
