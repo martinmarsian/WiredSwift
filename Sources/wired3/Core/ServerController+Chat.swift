@@ -311,6 +311,7 @@ extension ServerController {
                 let rows = try Row.fetchAll(db, sql: """
                     SELECT username, last_nick, last_status, last_icon FROM users
                     WHERE username IS NOT NULL AND username != ''
+                      AND username != 'guest'
                       AND last_login_at IS NOT NULL
                       AND last_login_at > unixepoch('now') - 2592000
                       AND last_nick IS NOT NULL AND last_nick != ''

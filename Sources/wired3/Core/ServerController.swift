@@ -529,7 +529,7 @@ public class ServerController: ServerDelegate {
         client.state = .DISCONNECTED
         app?.clientsController?.removeClient(client: client)
 
-        if let login = leftLogin, !login.isEmpty,
+        if let login = leftLogin, !login.isEmpty, login != "guest",
            let nick = leftNick, !nick.isEmpty {
             self.broadcastOfflineUserEntry(login: login, nick: nick, status: leftStatus, icon: leftIcon)
         }
