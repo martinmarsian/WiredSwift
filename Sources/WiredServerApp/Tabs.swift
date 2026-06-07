@@ -284,6 +284,7 @@ struct GeneralTabView: View {
 @available(macOS 12.0, *)
 struct AdvancedTabView: View {
     @EnvironmentObject private var model: WiredServerViewModel
+    @State private var portText: String = ""
 
     var body: some View {
         SettingsScrollPane {

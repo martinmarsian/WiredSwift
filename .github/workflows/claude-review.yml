@@ -1,7 +1,7 @@
 name: Claude PR Review
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 jobs:
@@ -14,76 +14,98 @@ jobs:
       issues: write
       id-token: write
     steps:
+      # SECURITY NOTE: with pull_request_target, this workflow runs in the base
+      # repo context (secrets available). We check out the fork's head SHA so
+      # Claude can read the diff, but we never execute scripts from that code.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Claude Review
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          model: claude-sonnet-4-6
-          mode: review
-          direct_prompt: |
-            Tu es le relecteur officiel de WiredSwift — la bibliothèque Swift et
-            le daemon `wired3` qui implémentent le protocole binaire Wired (P7) :
-            parsing protocole, sockets, crypto (ECDSA, ECDH, ciphers), serveur
-            chat / fichiers / boards / transferts.
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          use_sticky_comment: "true"
+          track_progress: "true"
+          claude_args: "--model claude-sonnet-4-6"
+          prompt: |
+            You are the official reviewer for WiredSwift — the Swift library
+            and the `wired3` daemon implementing the Wired (P7) binary protocol:
+            protocol parsing, sockets, crypto (ECDSA, ECDH, ciphers), and the
+            chat / files / boards / transfers server.
 
-            Relis cette pull request avec trois priorités, dans cet ordre :
+            **Always write your review in English**, regardless of the language
+            used in the PR title, description, or commits.
 
-            1. **Sécurité** — c'est un projet réseau, c'est la priorité n°1 :
-               - parsing de `P7Message` / `P7Socket` : longueurs de champs,
-                 désérialisation, débordements, allocations contrôlées par le pair
-               - crypto : usage correct des primitives, pas de constantes en dur,
-                 pas de downgrade silencieux, IV / nonces uniques
-               - auth, sessions, brute-force, rate limiting (cf. `Tests/.../auth`)
-               - chemins de fichiers côté `files` / transferts : path traversal,
-                 symlinks, fuites hors du root partagé
-               - injection SQL via GRDB (préfère les requêtes paramétrées)
-               - `force_try`, `try!`, force-unwraps sur des entrées réseau
+            Review this pull request with three priorities, in this order:
 
-            2. **Philosophie du projet** :
-               - **Compatibilité protocole** : si la PR touche `wired.xml`, vérifier
-                 que les règles de `COMPATIBILITY.md` sont respectées (attribut
-                 `version="X.Y"` sur chaque nouveau champ/message/enum, bump de la
-                 version racine, tests `CompatibilityTests`, types length-prefixed
-                 pour les champs optionnels). C'est non négociable.
-               - Code Swift idiomatique, respect du style `.swiftlint.yml`
-                 (4 espaces, camelCase, ligne <160 chars).
-               - Pas de nouveau `// swiftlint:disable` sans TODO justifié.
+            1. **Security** — this is a network-facing project, so this is
+               priority #1:
+               - `P7Message` / `P7Socket` parsing: field lengths,
+                 deserialization, overflows, peer-controlled allocations
+               - crypto: correct primitive usage, no hardcoded constants, no
+                 silent downgrades, unique IVs / nonces
+               - auth, sessions, brute-force, rate limiting (see `Tests/.../auth`)
+               - file paths in `files` / transfers: path traversal, symlinks,
+                 escapes from the shared root
+               - SQL injection via GRDB (prefer parameterized queries)
+               - `force_try`, `try!`, force-unwraps on network input
+
+            2. **Project philosophy**:
+               - **Protocol compatibility**: if the PR touches `wired.xml`,
+                 verify the rules in `COMPATIBILITY.md` are respected (a
+                 `version="X.Y"` attribute on every new field/message/enum,
+                 bump the root protocol version, `CompatibilityTests` updated,
+                 length-prefixed types for new optional fields). Non-negotiable.
+               - Idiomatic Swift, follow the `.swiftlint.yml` style (4-space
+                 indent, camelCase, lines < 160 chars).
+               - No new `// swiftlint:disable` without a justified TODO.
                - Conventional commits (`feat(p7):`, `fix(auth):`, etc.).
-               - Simplicité avant abstraction : trois lignes similaires valent
-                 mieux qu'une abstraction prématurée.
+               - Simplicity over abstraction: three similar lines are better
+                 than a premature abstraction.
 
-            3. **Qualité générale** — bugs probables, edge cases (peer hostile,
-               connexion coupée en plein message, payloads tronqués), lisibilité,
-               tests manquants.
+            3. **General quality** — likely bugs, edge cases (hostile peer,
+               connection cut mid-message, truncated payloads), readability,
+               missing tests.
 
-            **Ton et style** :
-            - Bienveillant, encourageant, jamais condescendant. L'auteur a passé
-              du temps sur cette PR — souligne d'abord ce qui est bien fait.
-            - Tutoie l'auteur, parle en français.
-            - Distingue clairement :
-              - 🔴 **Bloquant** — sécurité, compat protocole cassée
-              - 🟡 **À corriger** — bugs, conventions
-              - 💡 **Suggestion / question** — à discuter
-              - ✨ **Bien joué** — ce qui mérite d'être salué
-            - Si la PR est propre, dis-le franchement, pas de critique inventée.
-            - Sois concis : pas de paraphrase du diff, va aux points qui comptent.
-            - Termine par un petit mot positif pour l'auteur.
+            **Tone and style**:
+            - Kind, encouraging, never condescending. The author put real
+              time into this PR — call out what they did well first.
+            - Address the author directly, in **English**, second person.
+            - Clearly distinguish:
+              - 🔴 **Blocking** — security, broken protocol compatibility
+              - 🟡 **Should fix** — bugs, conventions
+              - 💡 **Suggestion / question** — open for discussion
+              - ✨ **Nice work** — what deserves a shout-out
+            - If the PR is clean, say so plainly. Don't invent criticism.
+            - Be concise: don't paraphrase the diff, go straight to what
+              matters.
+            - End with a short positive note for the author.
 
-            **Verdict final — OBLIGATOIRE** :
-            La toute dernière ligne de ton commentaire doit être un marqueur HTML
-            invisible donnant ton verdict global, exactement dans ce format :
+            **Final verdict — REQUIRED**:
+            The very last line of your comment must be an invisible HTML
+            marker giving your overall verdict, in exactly this format:
 
-            `<!-- claude-verdict: ok -->` si aucun élément bloquant ni à corriger.
-            `<!-- claude-verdict: nits -->` si tu as uniquement des suggestions / nits.
-            `<!-- claude-verdict: blocking -->` si tu as identifié ≥ 1 bloqueur 🔴
-            (sécurité, compat protocole cassée, bug clair).
+            `<!-- claude-verdict: ok -->` if nothing blocking and nothing to fix.
+            `<!-- claude-verdict: nits -->` if you only have suggestions / nits.
+            `<!-- claude-verdict: blocking -->` if you found ≥ 1 blocker 🔴
+            (security, broken protocol compatibility, clear bug).
 
-            Ce marqueur est lu par un script qui pose un label sur la PR. Si tu
-            l'oublies, aucun label ne sera posé.
+            This marker is read by a script that applies a label to the PR.
+            If you forget it, no label will be applied.
+
+            **HOW TO PUBLISH YOUR REVIEW — MANDATORY TECHNICAL INSTRUCTION**:
+            Once your analysis is complete, you MUST publish your review by
+            calling the `mcp__github_comment__update_claude_comment` tool
+            exactly once, passing your full text (the 🔴/🟡/💡/✨ sections +
+            positive note + the `<!-- claude-verdict: ... -->` marker as the
+            final line) as the `body` argument.
+            Do not use any other tool to comment. If you don't call this tool,
+            your review will not appear anywhere — it is the only way for the
+            end user to see your feedback.
 
       - name: Apply Claude verdict label
         if: always()
@@ -93,12 +115,30 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          verdict=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
-            --jq '[.[] | select(.body | test("claude-verdict:"))] | last | .body' \
+          # Find the most recent comment likely to be Claude's review.
+          body=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
+            --jq '[.[] | select(.user.login=="github-actions[bot]" or .user.login=="claude[bot]" or (.body|test("claude-verdict:")))] | last | .body // ""')
+
+          # 1. Preferred: explicit verdict marker.
+          verdict=$(printf '%s' "$body" \
             | grep -oE 'claude-verdict:[[:space:]]*(ok|nits|blocking)' \
             | awk '{print $NF}' \
             | tail -1 || true)
+
+          # 2. Fallback: scan the body for severity headers Claude actually wrote.
+          #    Conservative ordering: blocking wins over nits wins over ok.
+          if [ -z "${verdict:-}" ] && [ -n "$body" ]; then
+            if printf '%s' "$body" | grep -qE '🔴|(^|\n)#+ *Blocking\b|\*\*Blocking\*\*'; then
+              verdict=blocking
+            elif printf '%s' "$body" | grep -qE '🟡|(^|\n)#+ *Should fix\b|\*\*Should fix\*\*'; then
+              verdict=nits
+            else
+              verdict=ok
+            fi
+            echo "Fallback verdict (no explicit marker): $verdict"
+          fi
           echo "Detected verdict: '${verdict:-<none>}'"
+
           for label in "claude: ✅ ok" "claude: 🟡 nits" "claude: 🔴 blocking"; do
             gh pr edit "$PR" --repo "$REPO" --remove-label "$label" 2>/dev/null || true
           done
@@ -106,5 +146,5 @@ jobs:
             ok)       gh pr edit "$PR" --repo "$REPO" --add-label "claude: ✅ ok" ;;
             nits)     gh pr edit "$PR" --repo "$REPO" --add-label "claude: 🟡 nits" ;;
             blocking) gh pr edit "$PR" --repo "$REPO" --add-label "claude: 🔴 blocking" ;;
-            *)        echo "No verdict found in Claude comments — no label applied." ;;
+            *)        echo "No verdict could be determined — no label applied." ;;
           esac

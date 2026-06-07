@@ -2721,14 +2721,18 @@ strict_identity = yes
 
     // MARK: - External port reachability check (opt-in, EU-hosted)
 
+    /// Two-step external port check (requires prior user consent):
+    ///   1. Resolve external IP via api.seeip.org (Netherlands)
+    ///   2. Probe TCP reachability via portchecker.co (Netherlands)
     private static func probePort(port: Int) async -> PortStatus {
         guard (1...65_535).contains(port) else { return .closed }
         guard let externalIP = await fetchExternalIP() else { return .error }
         return await checkPortExternal(ip: externalIP, port: port)
     }
 
+    /// Fetches the machine's external IP from api.seeip.org (Netherlands, EU).
     private static func fetchExternalIP() async -> String? {
-        guard let url = URL(string: "https://api.ipify.org?format=json") else { return nil }
+        guard let url = URL(string: "https://api.seeip.org/json") else { return nil }
         var req = URLRequest(url: url)
         req.timeoutInterval = 10
         guard let (data, _) = try? await URLSession.shared.data(for: req) else { return nil }
@@ -2736,37 +2740,18 @@ strict_identity = yes
         return (try? JSONDecoder().decode(IPResponse.self, from: data))?.ip
     }
 
+    /// Probes TCP reachability via portchecker.co (Netherlands, EU).
+    /// Single synchronous request — no polling needed.
     private static func checkPortExternal(ip: String, port: Int) async -> PortStatus {
-        guard let url = URL(string: "https://check-host.net/check-tcp?host=\(ip):\(port)&max_nodes=3") else { return .error }
+        let escaped = ip.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ip
+        guard let url = URL(string: "https://portchecker.co/api/v1/query?host=\(escaped)&port=\(port)") else { return .error }
         var req = URLRequest(url: url)
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        req.timeoutInterval = 15
+        req.timeoutInterval = 20
         guard let (data, _) = try? await URLSession.shared.data(for: req) else { return .error }
-
-        struct CheckInit: Decodable { let request_id: String }
-        guard let checkResp = try? JSONDecoder().decode(CheckInit.self, from: data) else { return .error }
-
-        // Poll at 3 s, then +4 s, then +6 s (open ports resolve in ~2 s, timeouts in ~6 s)
-        for delay: UInt64 in [3_000_000_000, 4_000_000_000, 6_000_000_000] {
-            try? await Task.sleep(nanoseconds: delay)
-            guard let resultURL = URL(string: "https://check-host.net/check-result/\(checkResp.request_id)") else { return .error }
-            var resultReq = URLRequest(url: resultURL)
-            resultReq.setValue("application/json", forHTTPHeaderField: "Accept")
-            resultReq.timeoutInterval = 10
-            guard let (resultData, _) = try? await URLSession.shared.data(for: resultReq) else { continue }
-            guard let json = try? JSONSerialization.jsonObject(with: resultData) as? [String: Any] else { continue }
-
-            var anyOpen = false
-            var anyPending = false
-            for (_, nodeValue) in json {
-                if nodeValue is NSNull { anyPending = true; continue }
-                guard let results = nodeValue as? [[String: Any]], !results.isEmpty else { continue }
-                if results.first?["address"] != nil { anyOpen = true }
-            }
-            if anyOpen { return .open }
-            if !anyPending { return .closed }
-        }
-        return .closed
+        struct PortCheckResponse: Decodable { let isOpen: Bool }
+        guard let resp = try? JSONDecoder().decode(PortCheckResponse.self, from: data) else { return .error }
+        return resp.isOpen ? .open : .closed
     }
 }
 
